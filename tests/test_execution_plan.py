@@ -1,7 +1,7 @@
 import pytest
 
 from datagraph import Flow, Task
-from datagraph.execution_plan import ExecutionPlan
+from datagraph.flow import FlowExecutionPlan
 
 
 @pytest.mark.anyio
@@ -13,4 +13,6 @@ async def test_create_execution_plan():
 
     flow = Flow.from_tasks(foo, bar, foobar, buzz).resolve()
 
-    assert flow.execution_plan == ExecutionPlan(partitions=[{foo, bar, foobar}, {buzz}])
+    assert flow.execution_plan == FlowExecutionPlan(
+        uuid=flow.execution_plan.uuid, partitions=[{foo, bar, foobar}, {buzz}]
+    )

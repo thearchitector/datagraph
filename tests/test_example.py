@@ -3,99 +3,72 @@ from collections.abc import AsyncIterator
 import anyio
 import pytest
 
-from datagraph import IO, Flow, IODef, Task
+from datagraph import IO, Flow, IOVal, Task
 
 logs = []
 
 # define a task with a name 'foo'
 # that expects some input stream 'a'
 # and outputs two streams 'b' and 'c'
-foo = Task(
-    name="foo",
-    inputs=[
-        IODef(name="a"),
-    ],
-    outputs=[
-        IODef(name="b"),
-        IODef(name="c"),
-    ],
-)
+foo = Task(name="foo", inputs={"a"}, outputs={"b", "c"})
 
 
 @foo
-async def _foo(a: IO[int]) -> AsyncIterator[IO[int]]:
+async def _foo(a: IO[int]) -> AsyncIterator[IOVal[int]]:
     a_val = await a.first()
 
-    yield IO(name="b", value=sum(range(a_val)))
+    yield IOVal(output="b", value=sum(range(a_val)))
 
     for i in range(a_val):
         logs.append(f"foo: {i}")
-        yield IO(name="c", value=i)
+        yield IOVal(output="c", value=i)
         await anyio.lowlevel.checkpoint()
 
 
 # define a task named 'bar'
 # that expects streams 'b' and 'c'
 # and outputs a stream 'd'
-bar = Task(
-    name="bar",
-    inputs=[
-        IODef(name="b"),
-        IODef(name="c"),
-    ],
-    outputs=[
-        IODef(name="d"),
-    ],
-)
+bar = Task(name="bar", inputs={"b", "c"}, outputs={"d"})
 
 
 @bar
-async def _bar(b: IO[int], c: IO[int]) -> AsyncIterator[IO[int]]:
+async def _bar(b: IO[int], c: IO[int]) -> AsyncIterator[IOVal[int]]:
     b_val = await b.first()
 
     async for c_val in c.stream():
         logs.append(f"bar: {b_val + c_val}")
-        yield IO(name="d", value=b_val + c_val)
+        yield IOVal(output="d", value=b_val + c_val)
         await anyio.lowlevel.checkpoint()
 
 
 # define some task foobar
 # that expects 4 inputs streams 'a', 'b', 'c', 'd'
-foobar = Task(
-    name="foobar",
-    inputs=[
-        IODef(name="a"),
-        IODef(name="b"),
-        IODef(name="c"),
-        IODef(name="d"),
-    ],
-    outputs=[
-        IODef(name="e"),
-    ],
-)
+foobar = Task(name="foobar", inputs={"a", "b", "c", "d"}, outputs={"e"})
 
 
 @foobar
 async def _foobar(
     a: IO[int], b: IO[int], c: IO[int], d: IO[int]
-) -> AsyncIterator[IO[int]]:
+) -> AsyncIterator[IOVal[int]]:
     a_val = await a.first()
     b_val = await b.first()
 
     # stream over both c and d at the same time so that we iterate over them even if
-    # new data is blocked by c or d in any given loop. with pad=False we're asserting
+    # new data is blocked by c or d in any given loop. we're asserting
     # that we can always do a 1-1 matchup of c and d. if pad=True, once either c or d
     # ran out of values, that shorter stream would yield Nones
-    async for c_val, d_val in c.stream_with(d, pad=False):
-        yield IO(name="e", value=a_val + b_val + c_val + d_val)
+    async for c_val, d_val in c.stream_with(d):
+        yield IOVal(output="e", value=a_val + b_val + c_val + d_val)
         await anyio.lowlevel.checkpoint()
 
 
 @pytest.mark.anyio
-async def test_execute_flow_simple(executor):
+async def test_execute_flow_simple(supervisor):
     flow = Flow.from_tasks(foo).resolve()
 
-    outputs: dict[str, IO] = await executor.run(flow, inputs=[IO(name="a", value=5)])
+    outputs: dict[str, IO] = await supervisor.start_flow(
+        flow, inputs=[IOVal(output="a", value=5)]
+    )
 
     assert outputs.keys() == {"b", "c"}
 
@@ -109,10 +82,12 @@ async def test_execute_flow_simple(executor):
 
 
 @pytest.mark.anyio
-async def test_execute_flow_interlacing(executor):
+async def test_execute_flow_interlacing(supervisor):
     flow = Flow.from_tasks(foo, bar).resolve()
 
-    outputs: dict[str, IO] = await executor.run(flow, inputs=[IO(name="a", value=5)])
+    outputs: dict[str, IO] = await supervisor.start_flow(
+        flow, inputs=[IOVal(output="a", value=5)]
+    )
 
     assert outputs.keys() == {"d"}
 
@@ -134,10 +109,12 @@ async def test_execute_flow_interlacing(executor):
 
 
 @pytest.mark.anyio
-async def test_execute_flow_complex(executor):
+async def test_execute_flow_complex(supervisor):
     flow = Flow.from_tasks(foo, bar, foobar).resolve()
 
-    outputs: dict[str, IO] = await executor.run(flow, inputs=[IO(name="a", value=5)])
+    outputs: dict[str, IO] = await supervisor.start_flow(
+        flow, inputs=[IOVal(output="a", value=5)]
+    )
 
     assert outputs.keys() == {"e"}
 

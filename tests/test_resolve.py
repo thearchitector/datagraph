@@ -9,13 +9,13 @@ foobar = Task(name="foobar", inputs={"a", "b"}, outputs={"c"})
 
 
 @pytest.mark.anyio
-async def test_resolution_required(executor):
+async def test_resolution_required(supervisor):
     flow = Flow.from_tasks(foo)
 
     assert not flow.resolved
 
     with pytest.raises(UnresolvedFlowError):
-        await executor.start(flow)
+        await supervisor.start_flow(flow)
 
     resolved_flow = flow.resolve()
 

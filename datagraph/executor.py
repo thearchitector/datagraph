@@ -5,6 +5,7 @@ from anyio import create_task_group
 from redis.exceptions import LockError
 
 from .exceptions import FlowExecutionAdvancementTimeout, UnresolvedFlowError
+from .io import IO
 from .supervisor import Supervisor
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -14,7 +15,6 @@ if TYPE_CHECKING:  # pragma: no cover
     from redis.asyncio.client import Pipeline
 
     from .flow import Flow, FlowExecutionPlan
-    from .io import IO
     from .task import Task
 
 
@@ -29,7 +29,7 @@ class Executor(ABC):
         await self._advance(flow.execution_plan)
 
         return {
-            output: IO(output, flow.execution_plan)
+            output: IO(output, flow.execution_plan, read_only=True)
             for task in flow.execution_plan.partitions[-1]
             for output in task.outputs
         }

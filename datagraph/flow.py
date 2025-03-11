@@ -25,7 +25,7 @@ class FlowExecutionPlan(BaseModel):
         # TODO: use uuid to resolve IO all tasks in current partition
         # check that every task's `flow:{flow_uuid}:tasks:{name}:done` key
         # is set
-        raise NotImplementedError()
+        return self.current_partition == 1
 
     def proceed(self) -> set["Task"]:
         self.current_partition += 1

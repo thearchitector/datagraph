@@ -43,14 +43,16 @@ class Executor(ABC):
             async with Supervisor.instance.client.lock(
                 f"flow:{flow_execution_plan.uuid}:execution-lock",
                 blocking=True,
-                block_timeout=(
+                blocking_timeout=(
                     Supervisor.instance.config.flow_execution_advancement_timeout
                 ),
             ):
-                async with Supervisor.instance.client.pipeline() as pipe:
-                    if await flow_execution_plan.partition_complete(pipe):
+                if await flow_execution_plan.partition_complete(
+                    Supervisor.instance.client
+                ):
+                    async with Supervisor.instance.client.pipeline() as pipe:
                         try:
-                            partition: set["Task"] = flow_execution_plan.proceed(pipe)
+                            partition: set["Task"] = flow_execution_plan.proceed()
                             await self.dispatch(flow_execution_plan, partition)
                         except IndexError:
                             await self._finish(pipe, flow_execution_plan)

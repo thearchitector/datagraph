@@ -27,7 +27,7 @@ class FlowExecutionPlan(BaseModel):
         # is set
         raise NotImplementedError()
 
-    def proceed(self, pipeline: "Pipeline") -> set["Task"]:
+    def proceed(self) -> set["Task"]:
         self.current_partition += 1
         return self.partitions[self.current_partition]
 

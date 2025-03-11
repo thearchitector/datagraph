@@ -20,12 +20,6 @@ if TYPE_CHECKING:  # pragma: no cover
 class Supervisor:
     _instance: "ClassVar[Supervisor | None]" = None
 
-    def __new__(cls, *args: "Any", **kwargs: "Any") -> "Supervisor":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls, *args, **kwargs)
-
-        return cls._instance
-
     def __init__(
         self,
         client: "Redis[bytes]",
@@ -36,13 +30,21 @@ class Supervisor:
         self.config = Config(**settings)
         self.client: "Redis[bytes]" = client
         self.executor: "Executor" = executor
-        self.serializer: "Serializer" = serializer or PicklingZstdSerializer()
+        self.serializer: "Serializer" = serializer or PicklingZstdSerializer(
+            self.config.serialization_secret
+        )
+        # Set the class variable to this instance
+        Supervisor._instance = self
 
     @classmethod
     def attach(cls, *args: "Any", **kwargs: "Any") -> "Supervisor":
+        # If an instance already exists, return it instead of creating a new one
+        if cls._instance is not None:
+            return cls._instance
         return cls(*args, **kwargs)
 
     @classmethod
+    @property
     def instance(cls: type["Self"]) -> "Self":
         if not cls._instance:
             raise RuntimeError("Supervisor is not available.")

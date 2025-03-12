@@ -1,4 +1,5 @@
-from .exceptions import CyclicFlowError, UnresolvedFlowError
+from fast_depends import Depends
+
 from .executor import Executor, LocalExecutor
 from .flow import Flow
 from .io import IO, IOVal
@@ -6,13 +7,12 @@ from .supervisor import Supervisor
 from .task import Task
 
 __all__ = [
-    "Supervisor",
-    "IO",
-    "IOVal",
-    "Task",
-    "Flow",
+    "Depends",
     "Executor",
     "LocalExecutor",
-    "UnresolvedFlowError",
-    "CyclicFlowError",
+    "Flow",
+    "IO",
+    "IOVal",
+    "Supervisor",
+    "Task",
 ]

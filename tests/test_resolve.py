@@ -1,7 +1,7 @@
 import pytest
 
-from datagraph import CyclicFlowError, Flow, Task, UnresolvedFlowError
-from datagraph.exceptions import DuplicateIOError
+from datagraph import Flow, Task
+from datagraph.exceptions import CyclicFlowError, DuplicateIOError, UnresolvedFlowError
 
 foo = Task(name="foo", inputs={"a"}, outputs={"b"})
 bar = Task(name="bar", inputs={"b"}, outputs={"a"})

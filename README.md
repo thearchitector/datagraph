@@ -1,68 +1,113 @@
-# DataGraph
+# Datagraph
 
-An asynchronous data framework based on dataflow programming principles. DataGraph allows you to define tasks as async iterators that can incrementally yield data, forming a Directed Acyclic Graph (DAG).
+A framework-agnostic asynchronous task library based on dataflow computing principles. With Datagraph, you can treat task results as streams of information to enable
+real-time and parallel data processing.
+
+Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery, or with any other asynchronous function framework; all you need is a notion of "running a task" to implement an `Executor`.
+
+Out-of-the-box, there are Executors available for local execution and Celery.
 
 ## Features
 
-- **Async-first**: Built on anyio for asynchronous execution
-- **Dataflow Programming**: Tasks can incrementally yield data in streams
-- **Dependency Injection**: Tasks can specify IO requirements and consume outputs from previous tasks
-- **Distributed Execution**: Run flows in either local or distributed contexts using Redis
-- **Concurrent Execution**: Multiple tasks within a flow can run concurrently
-- **No Central Management**: Flows are dispatched asynchronously without a central service
+WIP
+
+- async first
+- distributed first
+- decentralized
+    - tasks can be implemented in different services
+    - no central task broker or management service
+- fastapi-style task dependency injection
+- optimistic parallel processing via directed streams
+    - since tasks operate on streams you can rely on high degrees of parallelism vs. sequential DAGs
+    - it can still be used as a workflow engine/canvas through task partitioning (tasks can wait for complete input streams before starting)
+- redis based
+- not complicated
+    - the API is intentionally minimal and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
+- visualization
+    - sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow
 
 ## Installation
 
-```bash
-pip install -e .
-```
-
-Or with Poetry:
-
-```bash
-poetry install
-```
+WIP
 
 ## Usage
 
-Here's a simple example of how to use DataGraph:
+This is a contrived example, but illustrates many of the basic features you'd want to use:
 
 ```python
 from collections.abc import AsyncIterator
+from typing import Annotated
 
-from datagraph import IO, Executor, Flow, IODef, Task
+from datagraph import Depends, IO, LocalExecutor, Flow, Supervisor, Task
 from redis.asyncio import Redis
 
-# Define a task with inputs and outputs
-task1 = Task(
-    name="task1",
-    inputs=[IODef(name="input")],
-    outputs=[IODef(name="output")],
+# some externally-defined 'thing'
+def get_multiplier():
+    return 2
+
+# define some tasks with some named inputs and outputs
+foobar = Task(
+    name="foobar",
+    inputs=["foo"],
+    outputs=["bar"]
 )
 
-@task1
-async def _task1(input: IO[int]) -> AsyncIterator[IO[int]]:
-    val = await input.first()
-    yield IO(name="output", value=val * 2)
+# register the task to some function.
+# this doesn't necessarily need to exist in the same repo / application / service that starts the Flow
+@foobar
+async def _foobar(
+    foo: IO[int],
+    # multiplier is a non-IO dependency and will resolve properly
+    multiplier: Annotated[int, Depends(get_multiplier)],
+) -> AsyncIterator[IOVal[int]]:
+    # fetch the first (and only) value in the 'foo' IO stream
+    foo_val = await foo.first()
 
-# Create a flow from tasks
-flow = Flow.from_tasks(task1)
-flow.resolve()
+    # yield individual values into the IO stream 'bar'
+    for i in range(foo_val):
+        yield IOVal(name="bar", value=i * multiplier)
 
-# Execute the flow
-async def run():
-    executor = Executor(redis=Redis())
-    result = await executor.run(
+
+async def main():
+    # create a flow from tasks
+    flow = Flow.from_tasks(foobar)
+
+    # resolve the Flow. this is required, and ensures the Flow is actually executable.
+    # you can also do `.from_tasks(...).resolve()`
+    flow.resolve()
+
+    result: dict[str, IO[Any]] = await Supervisor.instance.start_flow(
         flow, 
-        inputs=[IO(name="input", value=5)], 
-        stream=True
+        inputs=[IOVal(name="foo", value=5)]
     )
     
-    # Stream results
-    async for val in result.stream():
+    # concurrently stream the results as they complete. this will loop until foobar
+    # has yielded all it's values to the 'bar' IO stream
+    async for val in result["bar"].stream():
         print(val)
+
+
+# the Supervisor is a global singleton responsible for coordinating
+# local task execution. it is the means through which you define
+# the Datagraph Redis client, Executor, or other configuration options.
+# this can be done anywhere in your application, either in the import scope
+# or within some entrypoint, but MUST be defined in every service that provides
+# an implementation for a Task.
+#
+# nothing _strictly_ requires the non-Redis argument to match across all task
+# services, but handling that behavior is undefined / unsupported.
+Supervisor.attach(client=Redis(), executor=LocalExecutor())
+
+# for the sake of example, this is the same as starting a Flow from within
+# some running application service / endpoint
+anyio.run(main)
+# >>> 0
+# >>> 2
+# >>> 4
+# >>> 6
+# >>> 8
 ```
 
 ## License
 
-MIT
+This library is licensed under the [BSD 3-Clause License](./LICENSE).

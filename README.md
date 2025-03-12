@@ -1,11 +1,32 @@
 # Datagraph
 
-A framework-agnostic asynchronous task library based on dataflow computing principles. With Datagraph, you can treat task results as streams of information to enable
-real-time and parallel data processing.
+A framework-agnostic asynchronous data processing library based on dataflow computing principles. Datagraph treats all data as continuous streams of information, enabling
+you to easily build parallel and real-time data processing pipelines.
 
 Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery, or with any other asynchronous function framework; all you need is a notion of "running a task" to implement an `Executor`.
 
 Out-of-the-box, there are Executors available for local execution and Celery.
+
+## Rationale
+
+For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
+That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps.
+If I have tasks A, B, and C, I can pass data into A, then it can be passed to B, then C.
+
+In the discrete model, by definition, B cannot run until A is finished. That poses a problem when you have lots of data, or perhaps data that isn't all readily available.
+If I'm building some web dashboard-backed ETL pipeline and one day need to process 2000 files, my users would be mad if they had to wait for all 2000 files to finish A and B before C could display the results.
+
+The traditional way of dealing with this is three-fold:
+1. Break up the 2000 files into more manageable groups and run multiple pipelines.
+2. Implement some mechanism for coordianting and managing those independent groups.
+3. Buy more hardware (from AWS, etc.) so you can run 100 As, 100 Bs, and 100 Cs.
+
+Other problems have significantly less obvious answers: what happens when something fails?
+
+WIP
+
+- streams are continuous, not discrete
+- but generalizable. valid 
 
 ## Features
 

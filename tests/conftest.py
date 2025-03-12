@@ -1,3 +1,4 @@
+import anyio
 import pytest
 from fakeredis import FakeAsyncConnection
 from redis.asyncio import ConnectionPool
@@ -11,7 +12,10 @@ async def supervisor():
     pool = ConnectionPool.from_url(
         "redis://localhost:6379/0", connection_class=FakeAsyncConnection
     )
-    return Supervisor.attach(client=Redis.from_pool(pool), executor=LocalExecutor())
+    async with anyio.create_task_group() as tg:
+        yield Supervisor.attach(
+            client=Redis.from_pool(pool), executor=LocalExecutor(tg)
+        )
 
 
 @pytest.fixture(

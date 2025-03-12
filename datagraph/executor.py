@@ -25,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class Executor(ABC):
     async def start(
-        self, flow: "Flow", inputs: list["IOVal[Any]"] = None
+        self, flow: "Flow", inputs: list["IOVal[Any]"] = None, all_outputs: bool = False
     ) -> dict[str, "IO[Any]"]:
         """Start a Flow."""
         # ensure the Flow is runnable
@@ -53,12 +53,19 @@ class Executor(ABC):
         # kickoff the plan
         await self._advance(flow.execution_plan)
 
-        #
-        return {
-            output: IO(output, flow.execution_plan, read_only=True)
-            for task in flow.execution_plan.partitions[-1]
-            for output in task.outputs
-        }
+        if all_outputs:
+            return {
+                output: IO(output, flow.execution_plan, read_only=True)
+                for p in flow.execution_plan.partitions
+                for task in p
+                for output in task.outputs
+            }
+        else:
+            return {
+                output: IO(output, flow.execution_plan, read_only=True)
+                for task in flow.execution_plan.partitions[-1]
+                for output in task.outputs
+            }
 
     async def _advance(self, flow_execution_plan: "FlowExecutionPlan") -> None:
         """

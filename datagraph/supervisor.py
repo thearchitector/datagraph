@@ -52,9 +52,12 @@ class Supervisor:
         return cls._instance
 
     async def start_flow(
-        self, flow: "Flow", inputs: list["IO[Any]"] | None = None
+        self,
+        flow: "Flow",
+        inputs: list["IO[Any]"] | None = None,
+        all_outputs: bool = False,
     ) -> dict[str, "IO[Any]"]:
-        return await self.executor.start(flow, inputs)
+        return await self.executor.start(flow, inputs=inputs, all_outputs=all_outputs)
 
     @lru_acache(maxsize=5)
     async def _load_flow_execution_plan(

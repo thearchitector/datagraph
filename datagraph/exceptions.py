@@ -10,6 +10,11 @@ class DatagraphError(Exception):
         super().__init__(*args, **kwargs)
 
 
+##
+## FLOW RESOLUTION
+##
+
+
 class UnresolvedFlowError(DatagraphError):
     def __init__(self) -> None:
         super().__init__("Flows must be resolved before they can be used.")
@@ -33,16 +38,41 @@ class CyclicFlowError(FlowResolutionError):
         )
 
 
-class FlowExecutionAdvancementTimeout(DatagraphError):
-    def __init__(self, flow_execution_uuid: "UUID") -> None:
+##
+## FLOW EXECUTION
+##
+
+
+class FlowExecutionError(DatagraphError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class FloatingIOError(FlowExecutionError):
+    def __init__(self, missing_inputs: set[str]) -> None:
         super().__init__(
-            f"Failed to advance execution for flow '{flow_execution_uuid}'."
+            f"Flow requires supplied values for inputs: '{missing_inputs}'."
         )
 
 
-class TamperedDataError(DatagraphError):
-    def __init__(self) -> None:
-        super().__init__("Deserialization failed due to signature mismatch.")
+class FlowExecutionAdvancementTimeout(FlowExecutionError):
+    def __init__(self, flow_execution_uuid: "UUID") -> None:
+        super().__init__(
+            f"Failed to advance execution for Flow '{flow_execution_uuid}'."
+        )
+
+
+class IOStreamTimeout(FlowExecutionError):
+    def __init__(self, io_name: str, timeout: int) -> None:
+        super().__init__(
+            f"Failed to read a new value from IO '{io_name}' before max timeout"
+            f" reached ({timeout}s)."
+        )
+
+
+##
+## IO
+##
 
 
 class IOError(DatagraphError):
@@ -53,6 +83,11 @@ class IOError(DatagraphError):
 class UnserializableValueError(IOError):
     def __init__(self, value: "Any") -> None:
         super().__init__(f"{value} is not a serializable IO value.")
+
+
+class TamperedDataError(IOError):
+    def __init__(self) -> None:
+        super().__init__("Deserialization failed due to signature mismatch.")
 
 
 class ReadOnlyIOError(IOError):

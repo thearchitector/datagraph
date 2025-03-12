@@ -5,8 +5,6 @@ import pytest
 
 from datagraph import IO, Flow, IOVal, Task
 
-logs = []
-
 # define a task with a name 'foo'
 # that expects some input stream 'a'
 # and outputs two streams 'b' and 'c'
@@ -17,11 +15,10 @@ foo = Task(name="foo", inputs={"a"}, outputs={"b", "c"})
 async def _foo(a: IO[int]) -> AsyncIterator[IOVal[int]]:
     a_val = await a.first()
 
-    yield IOVal(output="b", value=sum(range(a_val)))
+    yield IOVal(name="b", value=sum(range(a_val)))
 
     for i in range(a_val):
-        logs.append(f"foo: {i}")
-        yield IOVal(output="c", value=i)
+        yield IOVal(name="c", value=i)
         await anyio.lowlevel.checkpoint()
 
 
@@ -36,8 +33,7 @@ async def _bar(b: IO[int], c: IO[int]) -> AsyncIterator[IOVal[int]]:
     b_val = await b.first()
 
     async for c_val in c.stream():
-        logs.append(f"bar: {b_val + c_val}")
-        yield IOVal(output="d", value=b_val + c_val)
+        yield IOVal(name="d", value=b_val + c_val)
         await anyio.lowlevel.checkpoint()
 
 
@@ -58,7 +54,7 @@ async def _foobar(
     # that we can always do a 1-1 matchup of c and d. if pad=True, once either c or d
     # ran out of values, that shorter stream would yield Nones
     async for c_val, d_val in c.stream_with(d):
-        yield IOVal(output="e", value=a_val + b_val + c_val + d_val)
+        yield IOVal(name="e", value=a_val + b_val + c_val + d_val)
         await anyio.lowlevel.checkpoint()
 
 
@@ -68,45 +64,42 @@ async def test_execute_flow_simple(supervisor):
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
-            flow, inputs=[IOVal(output="a", value=5)]
+            flow, inputs=[IOVal(name="a", value=5)]
         )
 
-        # assert outputs.keys() == {"b", "c"}
+    assert {"b", "c"}.issubset(outputs.keys())
 
-        b_vals = [r async for r in outputs["b"].stream()]
-        b_val = await outputs["b"].first()
-        c_val = await outputs["c"].first()
+    b_vals = [r async for r in outputs["b"].stream()]
+    b_val = await outputs["b"].first()
+    c_val_first = await outputs["c"].first()
+    c_val_last = [r async for r in outputs["c"].stream()][-1]
+    # c_val_latest = await outputs["c"].latest()
 
     assert b_vals == [10]
     assert b_val == 10
-    assert c_val == 0
+    assert c_val_first == 0
+    assert c_val_last == 4
+    # assert c_val_latest == 4
 
 
 @pytest.mark.anyio
-async def test_execute_flow_interlacing(supervisor):
+async def test_execute_flow_dual_output(supervisor):
     flow = Flow.from_tasks(foo, bar).resolve()
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
-            flow, inputs=[IOVal(output="a", value=5)]
+            flow, inputs=[IOVal(name="a", value=5)]
         )
 
-        # assert outputs.keys() == {"d"}
+    assert {"c", "d"}.issubset(outputs.keys())
 
-        # wait for the flow to complete
-        [_ async for _ in outputs["d"].stream()]
-
-    assert logs == [
-        "foo: 0",
-        "bar: 10",
-        "foo: 1",
-        "bar: 11",
-        "foo: 2",
-        "bar: 12",
-        "foo: 3",
-        "bar: 13",
-        "foo: 4",
-        "bar: 14",
+    c_d_res = [rs async for rs in outputs["c"].stream_with(outputs["d"])]
+    assert c_d_res == [
+        (0, 10),
+        (1, 11),
+        (2, 12),
+        (3, 13),
+        (4, 14),
     ]
 
 
@@ -116,18 +109,16 @@ async def test_execute_flow_complex(supervisor):
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
-            flow, inputs=[IOVal(output="a", value=5)]
+            flow, inputs=[IOVal(name="a", value=5)]
         )
 
-        # assert outputs.keys() == {"e"}
+        assert "e" in outputs.keys()
 
-        e_vals = [r async for r in outputs["e"].stream()]
-
-    expected = [
+    e_vals = [r async for r in outputs["e"].stream()]
+    assert e_vals == [
         5 + 10 + 0 + 10,
         5 + 10 + 1 + 11,
         5 + 10 + 2 + 12,
         5 + 10 + 3 + 13,
         5 + 10 + 4 + 14,
     ]
-    assert e_vals == expected

@@ -38,7 +38,10 @@ class Serializer(ABC):
     @final
     def dump(self, value: "Any") -> bytes:
         """Serialize and compress a value into a bytestream for storage."""
-        return self.compress(self.serialize(value))
+        try:
+            return self.compress(self.serialize(value))
+        except pickle.PickleError as e:
+            raise UnserializableValueError(value) from e
 
     @final
     def load(self, data: bytes) -> "Any":
@@ -55,10 +58,7 @@ class PicklingZstdSerializer(Serializer):
         self.secret_key: bytes = secret.encode()
 
     def serialize(self, data: "Any") -> bytes:
-        try:
-            return pickletools.optimize(pickle.dumps(data, protocol=5))
-        except pickle.PickleError as e:
-            raise UnserializableValueError(data) from e
+        return pickletools.optimize(pickle.dumps(data, protocol=5))
 
     def deserialize(self, data: bytes) -> "Any":
         return pickle.loads(data)
@@ -81,14 +81,14 @@ class PicklingZstdSerializer(Serializer):
         compressed = self.compressor.compress(data)
         signer = blake2b(digest_size=16, key=self.secret_key, usedforsecurity=True)
         signer.update(compressed)
-        return signer.digest() + b"|" + compressed
+        return signer.hexdigest().encode() + b"|" + compressed
 
     def decompress(self, compressed: bytes) -> bytes:
         try:
             signature, compressed = compressed.split(b"|", 1)
             signer = blake2b(digest_size=16, key=self.secret_key, usedforsecurity=True)
             signer.update(compressed)
-            assert compare_digest(signer.digest(), signature)
+            assert compare_digest(signer.hexdigest().encode(), signature)
         except (ValueError, AssertionError) as e:
             raise TamperedDataError() from e
 

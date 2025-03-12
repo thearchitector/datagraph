@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING
 from anyio import create_task_group
 from redis.exceptions import LockError
 
-from .exceptions import FlowExecutionAdvancementTimeout, UnresolvedFlowError
+from .exceptions import (
+    FloatingIOError,
+    FlowExecutionAdvancementTimeout,
+    UnresolvedFlowError,
+)
 from .io import IO
 from .supervisor import Supervisor
 
@@ -15,19 +19,41 @@ if TYPE_CHECKING:  # pragma: no cover
     from redis.asyncio.client import Pipeline
 
     from .flow import Flow, FlowExecutionPlan
+    from .io import IOVal
     from .task import Task
 
 
 class Executor(ABC):
     async def start(
-        self, flow: "Flow", inputs: list["IO[Any]"] = None
+        self, flow: "Flow", inputs: list["IOVal[Any]"] = None
     ) -> dict[str, "IO[Any]"]:
         """Start a Flow."""
+        # ensure the Flow is runnable
         if not flow.resolved:
             raise UnresolvedFlowError()
+        elif missing_inputs := (
+            flow.topology.floating_inputs - {inp.name for inp in inputs}
+        ):
+            raise FloatingIOError(missing_inputs)
 
+        # write initial values for inputs IOs
+        input_ios: dict[str, IO["Any"]] = {
+            inp.name: IO(inp.name, flow.execution_plan, read_only=False)
+            for inp in inputs
+        }
+        for inp in inputs:
+            await input_ios[inp.name].write(inp)
+
+        # save the execution plan
+        await Supervisor.instance.client.set(
+            f"flow:{flow.execution_plan.uuid}",
+            Supervisor.instance.serializer.dump(flow.execution_plan),
+        )
+
+        # kickoff the plan
         await self._advance(flow.execution_plan)
 
+        #
         return {
             output: IO(output, flow.execution_plan, read_only=True)
             for task in flow.execution_plan.partitions[-1]
@@ -47,7 +73,7 @@ class Executor(ABC):
                     Supervisor.instance.config.flow_execution_advancement_timeout
                 ),
             ):
-                if await flow_execution_plan.partition_complete(
+                if not await flow_execution_plan.partition_complete(
                     Supervisor.instance.client
                 ):
                     async with Supervisor.instance.client.pipeline() as pipe:
@@ -90,13 +116,13 @@ class LocalExecutor(Executor):
         tasks: set["Task"],
     ) -> None:
         for task in tasks:
-            if task._instance is None:
+            if task._runner is None:
                 raise ValueError(
                     f"Task '{task.name}' is not defined in the current context."
                     f" Register it to a function with `@{task.name}`."
                 )
 
-            tg.start_soon(task._instance, flow_execution_plan.uuid)
+            tg.start_soon(task._runner, flow_execution_plan.uuid)
 
     async def dispatch(
         self, flow_execution_plan: "FlowExecutionPlan", tasks: set["Task"]

@@ -14,3 +14,5 @@ class Config(BaseSettings):
 
     io_read_timeout: PositiveInt = 500
     """ Max iteration timeout in milliseconds for IO stream operations."""
+    io_read_pending_timeout: PositiveInt = 30
+    """ Max timeout in seconds to wait between successful IO stream operations."""

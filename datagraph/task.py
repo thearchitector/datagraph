@@ -36,6 +36,12 @@ class Task(BaseModel):
         self._runner = TaskRunner(task=self, fn=fn)
         return self._runner
 
+    def __getstate__(self) -> dict[str, "Any"]:
+        state = super().__getstate__()
+        # the task runner is not serializable, nor would we want it to be
+        state.get("__pydantic_private__", {}).pop("_runner", None)
+        return state
+
 
 @lru_cache
 def _get_available_parameters(fn) -> dict[str, dict[str, bool]]:
@@ -110,6 +116,7 @@ class TaskRunner:
 
             async for output in resolved_fn:
                 await resolved_outputs[output.name].write(output)
+                await anyio.lowlevel.checkpoint()
 
             async with anyio.create_task_group() as tg:
                 for output in resolved_outputs.values():

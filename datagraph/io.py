@@ -1,12 +1,14 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from enum import Enum
+from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
+from anyio import current_time
 from asyncstdlib import zip as azip
 from asyncstdlib import zip_longest as azip_longest
 from pydantic import RootModel, computed_field
 from redis.asyncio import RedisError
 
-from .exceptions import MismatchedIOError, ReadOnlyIOError
+from .exceptions import IOStreamTimeout, MismatchedIOError, ReadOnlyIOError
 from .supervisor import Supervisor
 
 if TYPE_CHECKING:
@@ -29,8 +31,14 @@ RawStreamEntry = list[tuple[str, list[tuple[str, dict[str, bytes]]]]]
 
 @dataclass(kw_only=True, unsafe_hash=True, slots=True)
 class IOVal(Generic[T]):
-    output: str
+    name: str
     value: T
+
+
+class StreamCursor(Enum):
+    FROM_FIRST = "0"
+    FROM_LATEST = "+"
+    ONLY_NEW = "$"
 
 
 class StreamEntry(RootModel[RawStreamEntry]):
@@ -61,8 +69,11 @@ class IO(Generic[T]):
         self._serializer: "Serializer" = Supervisor.instance.serializer
         self._read_only = read_only
 
-    async def stream(self) -> "AsyncIterator[T]":
-        last_entry_id: str = "0"
+    async def stream(
+        self, cursor: StreamCursor = StreamCursor.FROM_FIRST
+    ) -> "AsyncIterator[T]":
+        last_entry_id: str = cursor.value
+        last_stream_read: float = current_time()
 
         try:
             while True:
@@ -75,24 +86,36 @@ class IO(Generic[T]):
                 # no message in the blocking window and the stream is complete, so
                 # there's a pretty solid chance we won't ever stream more info
                 if not raw_message:
-                    if await self._client.get(self._completion_key):
+                    if await self._client.get(self._completion_key) == b"true":
                         break
+                    elif (
+                        current_time() - last_stream_read
+                        > Supervisor.instance.config.io_read_pending_timeout
+                    ):
+                        raise IOStreamTimeout(
+                            self.name,
+                            Supervisor.instance.config.io_read_pending_timeout,
+                        )
 
                     continue
 
                 message = StreamEntry(raw_message)
-                ioval = self._serializer.load(message.ioval_bytes)
+                ioval = cast(IOVal["T"], self._serializer.load(message.ioval_bytes))
 
-                if ioval.output != self.name:
-                    raise MismatchedIOError("read", ioval.output, self.name)
+                if ioval.name != self.name:
+                    raise MismatchedIOError("read", ioval.name, self.name)
 
                 last_entry_id = message.entry_id
-                yield ioval
+                last_stream_read = current_time()
+                yield ioval.value
         except RedisError as e:
             raise e
 
     async def first(self) -> T:
-        return await anext(self.stream())
+        return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))
+
+    async def latest(self) -> T:
+        return await anext(self.stream(cursor=StreamCursor.FROM_LATEST))
 
     async def stream_with(
         self, *others: "IO[U]", pad: "Any" = _NOPAD, strict_when_no_pad: bool = False
@@ -109,15 +132,15 @@ class IO(Generic[T]):
         ):
             yield values
 
-    async def write(self, value: IOVal["T"]) -> None:
+    async def write(self, value: "T") -> None:
         if self._read_only:
             raise ReadOnlyIOError(self.name)
-        elif value.output != self.name:
-            raise MismatchedIOError("write", self.name, value.output)
+        elif value.name != self.name:
+            raise MismatchedIOError("write", self.name, value.name)
 
         await self._client.xadd(
             self._stream_key, {"ioval": self._serializer.dump(value)}
         )
 
     async def complete(self) -> None:
-        await self._client.set(self._completion_key, True)
+        await self._client.set(self._completion_key, "true")

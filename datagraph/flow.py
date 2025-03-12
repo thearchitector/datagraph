@@ -19,13 +19,13 @@ if TYPE_CHECKING:  # pragma: no cover
 class FlowExecutionPlan(BaseModel):
     uuid: UUID = Field(default_factory=uuid4)
     partitions: list[set[Task]]
-    current_partition: int = 0
+    current_partition: int = -1
 
     async def partition_complete(self, pipeline: "Pipeline") -> bool:
         # TODO: use uuid to resolve IO all tasks in current partition
         # check that every task's `flow:{flow_uuid}:tasks:{name}:done` key
         # is set
-        return self.current_partition == 1
+        return self.current_partition == len(self.partitions) - 1
 
     def proceed(self) -> set["Task"]:
         self.current_partition += 1
@@ -45,30 +45,25 @@ class Flow:
     def resolve(self) -> "Flow":
         all_inputs = set()
         all_outputs = set()
-        output_producers = {}
 
-        # Validate that no output is produced by multiple tasks
+        # validate that no output is produced by multiple tasks
         for task in self.tasks:
-            for inp in task.inputs:
-                all_inputs.add((task.name, inp))
+            all_inputs.update(task.inputs)
 
             for out in task.outputs:
-                # Check if this output is already produced by another task
-                if out in output_producers:
+                if out in all_outputs:
                     raise DuplicateIOError()
 
-                # Record which task produces this output
-                output_producers[out] = task.name
-                all_outputs.add((task.name, out))
+                all_outputs.add(out)
 
-        # Create a directed graph to represent the flow
+        # create a directed graph to represent the flow
         digraph = nx.DiGraph()
 
-        # Add all tasks as nodes
+        # add all tasks as nodes
         for task in self.tasks:
             digraph.add_node(task)
 
-        # Connect tasks based on matching input/output names
+        # connect tasks based on matching input/output names
         for src_task in self.tasks:
             for src_out in src_task.outputs:
                 for dst_task in self.tasks:
@@ -89,7 +84,9 @@ class Flow:
 
             raise CyclicFlowError(sorted_cycles) from e
 
-        self._topology = Topology(digraph=digraph, order=order)
+        self._topology = Topology(
+            digraph=digraph, order=order, floating_inputs=all_inputs - all_outputs
+        )
         self._execution_plan = self._create_execution_plan()
 
         return self

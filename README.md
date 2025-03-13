@@ -1,32 +1,11 @@
 # Datagraph
 
-A framework-agnostic asynchronous data processing library based on dataflow computing principles. Datagraph treats all data as continuous streams of information, enabling
-you to easily build parallel and real-time data processing pipelines.
+A framework-agnostic asynchronous data processing library based on dataflow computing principles. Datagraph empowers you to design declaratively, replacing the notion of "tasks" and "pipelines" with "processors" and "flows" that treat IO as continuous streams of manipulatable information.
 
-Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery, or with any other asynchronous function framework; all you need is a notion of "running a task" to implement an `Executor`.
+Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
+or with any other asynchronous function framework; all you need is a notion of "running a function" to implement an `Executor`.
 
-Out-of-the-box, there are Executors available for local execution and Celery.
-
-## Rationale
-
-For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
-That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps.
-If I have tasks A, B, and C, I can pass data into A, then it can be passed to B, then C.
-
-In the discrete model, by definition, B cannot run until A is finished. That poses a problem when you have lots of data, or perhaps data that isn't all readily available.
-If I'm building some web dashboard-backed ETL pipeline and one day need to process 2000 files, my users would be mad if they had to wait for all 2000 files to finish A and B before C could display the results.
-
-The traditional way of dealing with this is three-fold:
-1. Break up the 2000 files into more manageable groups and run multiple pipelines.
-2. Implement some mechanism for coordianting and managing those independent groups.
-3. Buy more hardware (from AWS, etc.) so you can run 100 As, 100 Bs, and 100 Cs.
-
-Other problems have significantly less obvious answers: what happens when something fails?
-
-WIP
-
-- streams are continuous, not discrete
-- but generalizable. valid 
+Out-of-the-box, there are `Executors` available for local execution and [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
 ## Features
 
@@ -46,6 +25,35 @@ WIP
     - the API is intentionally minimal and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
 - visualization
     - sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow
+
+## Rationale
+
+For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
+That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps, and
+finishes when the last step completes. If I have tasks A, B, and C, I can pass data into A, then it can be passed to B, then C.
+
+In the discrete model, by definition, C cannot run until B is finished, and B cannot run until A is finished: it is serial. When you're dealing with lots of
+data, or perhaps starting with data that isn't all readily available, that begins to pose a problem. If I'm building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), my users would probably be mad if they had to wait for all 20,000 files to finish processing before they ended up in the application.
+
+The procedural way of dealing with this is usually three-fold, all for the purpose of stabily reducing time-to-completion:
+1. Break up the 20,000 files into more manageable groups and run multiple pipelines.
+2. Implement some mechanism for coordianting and managing those independent groups across the tasks.
+    - In the example above, that would likely _also_ mean implementing some homebrew monitoring tool or integrating with something like OpenTelemetry.
+3. Rent more and bigger hardware (from AWS, etc.) and utilize some Horizontal Autoscaling-like feature so you can run 100 As, 100 Bs, and 100 Cs.
+
+All of that is fine, of course, assuming you can afford it. But, naturally, it comes with other problems that have significantly less obvious answers: what do you do when something fails? Do you ensure your tasks are idempotent and restart everything? Do you implement some partial-success, partial-failure model with a deadletter queue? Do you just pay for Azure Data Factory, or perhaps a team to figure out Apache Kafka?
+
+With Datagraph's dataflow approach, you can be a lot more _declarative_. Instead of focusing on the mechanics of a workflow, in either execution or deployment, you can focus on what your workflow achieves. You don't write steps, but implement processors; steps accept and produce discrete values, processors operate on continuous **streams**.
+
+By treating data as continuous streams, you get three huge advantages:
+1. Processors can operate on data as soon as it exists, rather than wait for all of it to be available.
+2. You don't have to worry about task order or scheduling. Everything that can run in parallel does, _automatically_.
+3. Your resource requirements don't strictly grow with scale; processing as streams means you are easily free to process as much or as little as you want at any given time without increasing CPU or (more likely) RAM.
+
+In this model, applications like ETL pipelines make a lot more sense. You can start processing individual files as they're uploaded, manipulate and upload them in parallel, and don't need to worry about buying an EC2 instance with enough RAM to store 20,000 bitmap-filled PDFs.
+
+There's also a fourth benefit. a workflow of streams is generalizable. If you're writing
+a complex application, or just love imperative programming, you'll probably want to be able to run asynchronous tasks regardless. You can use Datagraph for that too: just write processors that deal in streams of 1 value (or container of many values).
 
 ## Installation
 

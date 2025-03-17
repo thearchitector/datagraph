@@ -32,9 +32,10 @@ class DuplicateIOError(FlowResolutionError):
 
 class CyclicFlowError(FlowResolutionError):
     def __init__(self, cycles: list[tuple[str]]) -> None:
+        cycle_str = "\n  ".join(" -> ".join(cycle) for cycle in cycles)
         super().__init__(
             "Flows cannot contain IO dependency cycles. Offending cycles:\n"
-            f" {'\n  '.join(' -> '.join(cycle) for cycle in cycles)}"
+            f" {cycle_str}"
         )
 
 

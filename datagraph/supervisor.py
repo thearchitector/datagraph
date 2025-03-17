@@ -1,5 +1,7 @@
+import warnings
 from typing import TYPE_CHECKING, cast
 
+from anyio.from_thread import BlockingPortalProvider
 from asyncstdlib.functools import lru_cache as lru_acache
 
 from .config import Config
@@ -25,14 +27,22 @@ class Supervisor:
         client: "Redis[bytes]",
         executor: "Executor",
         serializer: "Serializer | None" = None,
+        async_config: dict[str, "Any"] = None,
         **settings: "Any",
     ) -> None:
+        if async_config is None:
+            async_config = {}
+
         self.config = Config(**settings)
         self.client: "Redis[bytes]" = client
         self.executor: "Executor" = executor
         self.serializer: "Serializer" = serializer or PicklingZstdSerializer(
             self.config.serialization_secret
         )
+        self.async_portal = BlockingPortalProvider(
+            backend=async_config.get("backend", "asyncio"), backend_options=async_config
+        )
+
         # Set the class variable to this instance
         Supervisor._instance = self
 
@@ -40,7 +50,10 @@ class Supervisor:
     def attach(cls, *args: "Any", **kwargs: "Any") -> "Supervisor":
         # If an instance already exists, return it instead of creating a new one
         if cls._instance is not None:
-            return cls._instance
+            warnings.warn(
+                "Supervisor has already been attached. It will be replaced.",
+                stacklevel=2,
+            )
         return cls(*args, **kwargs)
 
     @classmethod

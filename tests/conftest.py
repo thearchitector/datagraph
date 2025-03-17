@@ -7,14 +7,18 @@ from datagraph import LocalExecutor, Supervisor
 from datagraph.redis.anyio import Redis
 
 
-@pytest.fixture(scope="session", autouse=True)
-async def supervisor():
-    pool = ConnectionPool.from_url(
+@pytest.fixture(scope="session")
+def redis_pool():
+    return ConnectionPool.from_url(
         "redis://localhost:6379/0", connection_class=FakeAsyncConnection
     )
+
+
+@pytest.fixture(scope="module", autouse=True)
+async def supervisor(redis_pool):
     async with anyio.create_task_group() as tg:
         yield Supervisor.attach(
-            client=Redis.from_pool(pool), executor=LocalExecutor(tg)
+            client=Redis.from_pool(redis_pool), executor=LocalExecutor(tg)
         )
 
 

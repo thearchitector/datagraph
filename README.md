@@ -43,17 +43,16 @@ The procedural way of dealing with this is usually three-fold, all for the purpo
 
 All of that is fine, of course, assuming you can afford it. But, naturally, it comes with other problems that have significantly less obvious answers: what do you do when something fails? Do you ensure your tasks are idempotent and restart everything? Do you implement some partial-success, partial-failure model with a deadletter queue? Do you just pay for Azure Data Factory, or perhaps a team to figure out Apache Kafka?
 
-With Datagraph's dataflow approach, you can be a lot more _declarative_. Instead of focusing on the mechanics of a workflow, in either execution or deployment, you can focus on what your workflow achieves. You don't write steps, but implement processors; steps accept and produce discrete values, processors operate on continuous **streams**.
+With Datagraph's approach, you can be a lot more _declarative_. Instead of focusing on the mechanics of a workflow, in either execution or deployment, you can focus on what your workflow achieves. You don't write steps, but implement processors; steps accept and produce discrete values, processors manipulate **continuous streams**.
 
 By treating data as continuous streams, you get three huge advantages:
-1. Processors can operate on data as soon as it exists, rather than wait for all of it to be available.
+1. Processors can manipulate data as soon as it becomes available, rather than waiting for all of it to exist before starting.
 2. You don't have to worry about task order or scheduling. Everything that can run in parallel does, _automatically_.
 3. Your resource requirements don't strictly grow with scale; processing as streams means you are easily free to process as much or as little as you want at any given time without increasing CPU or (more likely) RAM.
 
-In this model, applications like ETL pipelines make a lot more sense. You can start processing individual files as they're uploaded, manipulate and upload them in parallel, and don't need to worry about buying an EC2 instance with enough RAM to store 20,000 bitmap-filled PDFs.
+In this model, applications like ETL pipelines make a lot more sense. You can start processing individual files as they're uploaded, transform one while the previous is extracting, and don't need to design around buying an EC2 instance with enough RAM to store 20,000 bitmap-filled PDFs.
 
-There's also a fourth benefit. a workflow of streams is generalizable. If you're writing
-a complex application, or just love imperative programming, you'll probably want to be able to run asynchronous tasks regardless. You can use Datagraph for that too: just write processors that deal in streams of 1 value (or container of many values).
+There's also a fourth benefit. If you're writing a complex application, or just love imperative programming, you'll probably want to be able to run asynchronous tasks regardless. You can use Datagraph for that too; the benefit to defining a workflow using streams is that you can generalize procedural tasks as processors dealing in streams of 1 value.
 
 ## Installation
 

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Generic, TypeVar, cast
 
+import anyio
 from anyio import current_time
 from asyncstdlib import zip as azip
 from asyncstdlib import zip_longest as azip_longest
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
     from typing import Any, TypeVarTuple
 
+    from anyio.streams.memory import MemoryObjectSendStream
     from redis.asyncio import Redis
 
     from .flow import FlowExecutionPlan
@@ -131,6 +133,24 @@ class IO(Generic[T]):
             self.stream(), *(other.stream() for other in others), **zip_args
         ):
             yield values
+
+    async def as_available(self, *others: "IO[U]") -> "AsyncIterator[T | U]":
+        send_stream, receive_stream = anyio.create_memory_object_stream["T | U"]()
+
+        async def _read_stream(
+            io_obj: "IO[T | U]", send_stream: "MemoryObjectSendStream[T | U]"
+        ):
+            async with send_stream:
+                async for value in io_obj.stream():
+                    await send_stream.send(value)
+
+        async with anyio.create_task_group() as tg:
+            for io in (self, *others):
+                tg.start_soon(_read_stream, io, send_stream)
+
+            async with receive_stream:
+                async for value in receive_stream:
+                    yield value
 
     async def write(self, value: "T") -> None:
         if self._read_only:

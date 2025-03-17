@@ -18,16 +18,22 @@ zstandard = "^0.23.0"
 
 [tool.poetry.group.dev.dependencies]
 anyio = {extras = ["trio"], version = "^4.8.0"}
+celery = "^5.4.0"
 fakeredis = {extras = ["lua"], version = "^2.27.0"}
 pytest = "^8.3.5"
 pytest-asyncio = "^0.25.3"
+pytest-celery = "^1.2.0"
+pytest-cov = "^6.0.0"
 uvloop = "^0.21.0"
 
 [tool.poetry.group.lint.dependencies]
 mypy = "^1.15.0"
 
 [tool.pytest.ini_options]
-addopts = "-ra -vv -p no:asyncio"
+addopts = """-ra -vv \
+    -p no:asyncio \
+    --cov=datagraph --cov-report=html --cov-report=term --cov-branch \
+"""
 testpaths = [ "tests" ]
 
 [tool.mypy]

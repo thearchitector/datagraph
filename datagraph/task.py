@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, get_origin
 
 import anyio
+import sniffio
 from fast_depends import Depends, inject
 from fast_depends.use import solve_async_gen
 from pydantic import BaseModel, ConfigDict, Field
@@ -67,6 +68,9 @@ class TaskRunner:
     task: Task
     fn: "TaskFn"
 
+    def __post_init__(self) -> None:
+        self.__name__ = self.task.name
+
     async def _prepare_inputs(
         self, flow_execution_plan: "FlowExecutionPlan"
     ) -> dict[str, IO]:
@@ -101,7 +105,7 @@ class TaskRunner:
 
         return resolved_io_args
 
-    async def __call__(self, flow_execution_uuid: "UUID") -> None:
+    async def _run(self, flow_execution_uuid: "UUID") -> None:
         plan = await Supervisor.instance._load_flow_execution_plan(flow_execution_uuid)
         inputs = await self._prepare_inputs(plan)
 
@@ -123,3 +127,11 @@ class TaskRunner:
                     tg.start_soon(output.complete)
         else:
             await resolved_fn
+
+    def __call__(self, flow_execution_uuid: "UUID") -> "Awaitable[None] | None":
+        try:
+            sniffio.current_async_library()
+            return self._run(flow_execution_uuid)
+        except sniffio.AsyncLibraryNotFoundError:
+            with Supervisor.instance.async_portal as portal:
+                portal.call(self._run, flow_execution_uuid)

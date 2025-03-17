@@ -1,6 +1,6 @@
 # Datagraph
 
-A framework-agnostic asynchronous data processing library based on dataflow computing principles. Datagraph empowers you to design declaratively, replacing the notion of "tasks" and "pipelines" with "processors" and "flows" that treat IO as continuous streams of manipulatable information.
+An asynchronous data processing library based on dataflows. Datagraph empowers you to design declaratively, replacing the notion of "tasks" and "pipelines" with "processors" and "flows" that treat IO as continuous streams of manipulatable information.
 
 Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
 or with any other asynchronous function framework; all you need is a notion of "running a function" to implement an `Executor`.

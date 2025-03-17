@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "datagraph"
 version = "0.1.0"
-description = "An asynchronous task framework based on dataflow computing principles"
+description = "An asynchronous data processing library based on dataflows."
 authors = ["Elias Gabriel <oss@eliasfgabriel.com>"]
 readme = "README.md"
 

@@ -67,8 +67,8 @@ class IO(Generic[T]):
         self.name = name
         self._stream_key = f"flow:{flow_execution_plan.uuid}:io:{name}:data"
         self._completion_key = f"flow:{flow_execution_plan.uuid}:io:{name}:complete"
-        self._client: "Redis[bytes]" = Supervisor.instance.client
-        self._serializer: "Serializer" = Supervisor.instance.serializer
+        self._client: "Redis[bytes]" = Supervisor.instance().client
+        self._serializer: "Serializer" = Supervisor.instance().serializer
         self._read_only = read_only
 
     async def stream(
@@ -82,7 +82,7 @@ class IO(Generic[T]):
                 raw_message: RawStreamEntry | None = await self._client.xread(
                     streams={self._stream_key: last_entry_id},
                     count=1,
-                    block=Supervisor.instance.config.io_read_timeout,
+                    block=Supervisor.instance().config.io_read_timeout,
                 )
 
                 # no message in the blocking window and the stream is complete, so
@@ -92,11 +92,11 @@ class IO(Generic[T]):
                         break
                     elif (
                         current_time() - last_stream_read
-                        > Supervisor.instance.config.io_read_pending_timeout
+                        > Supervisor.instance().config.io_read_pending_timeout
                     ):
                         raise IOStreamTimeout(
                             self.name,
-                            Supervisor.instance.config.io_read_pending_timeout,
+                            Supervisor.instance().config.io_read_pending_timeout,
                         )
 
                     continue
@@ -116,8 +116,8 @@ class IO(Generic[T]):
     async def first(self) -> T:
         return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))
 
-    async def latest(self) -> T:
-        return await anext(self.stream(cursor=StreamCursor.FROM_LATEST))
+    # async def latest(self) -> T:
+    #     return await anext(self.stream(cursor=StreamCursor.FROM_LATEST))
 
     async def stream_with(
         self, *others: "IO[U]", pad: "Any" = _NOPAD, strict_when_no_pad: bool = False

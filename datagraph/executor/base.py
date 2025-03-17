@@ -34,7 +34,7 @@ class Executor(ABC):
         ):
             raise FloatingIOError(missing_inputs)
 
-        async with Supervisor.instance.client.pipeline() as pipe:
+        async with Supervisor.instance().client.pipeline() as pipe:
             # write initial values for inputs IOs
             input_ios: dict[str, IO["Any"]] = {
                 inp.name: IO(inp.name, flow.execution_plan, read_only=False)
@@ -46,7 +46,7 @@ class Executor(ABC):
             # save the execution plan
             await pipe.set(
                 f"flow:{flow.execution_plan.uuid}",
-                Supervisor.instance.serializer.dump(flow.execution_plan),
+                Supervisor.instance().serializer.dump(flow.execution_plan),
             )
 
             await pipe.execute()
@@ -74,29 +74,29 @@ class Executor(ABC):
         complete.
         """
         try:
-            async with Supervisor.instance.client.lock(
+            async with Supervisor.instance().client.lock(
                 f"flow:{flow_execution_plan.uuid}:execution-lock",
                 blocking=True,
                 blocking_timeout=(
-                    Supervisor.instance.config.flow_execution_advancement_timeout
+                    Supervisor.instance().config.flow_execution_advancement_timeout
                 ),
             ):
                 if not await flow_execution_plan.partition_complete(
-                    Supervisor.instance.client
+                    Supervisor.instance().client
                 ):
                     try:
                         partition: set["Task"] = flow_execution_plan.proceed()
 
                         # save the execution plan
-                        await Supervisor.instance.client.set(
+                        await Supervisor.instance().client.set(
                             f"flow:{flow_execution_plan.uuid}",
-                            Supervisor.instance.serializer.dump(flow_execution_plan),
+                            Supervisor.instance().serializer.dump(flow_execution_plan),
                         )
 
                         await self.dispatch(flow_execution_plan, partition)
                     except IndexError:
                         await self._finish(
-                            Supervisor.instance.client, flow_execution_plan
+                            Supervisor.instance().client, flow_execution_plan
                         )
 
         except LockError as e:

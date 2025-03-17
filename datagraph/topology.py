@@ -17,4 +17,4 @@ class Topology:
         self.floating_inputs = floating_inputs
 
     def __str__(self) -> str:
-        return generate_network_text(self.digraph, vertical_chains=True)
+        return "\n".join(generate_network_text(self.digraph, vertical_chains=True))

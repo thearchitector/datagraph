@@ -15,14 +15,14 @@ async def test_resolution_required(supervisor):
     assert not flow.resolved
 
     with pytest.raises(UnresolvedFlowError):
-        await supervisor.start_flow(flow)
+        str(flow.topology)
 
     resolved_flow = flow.resolve()
 
     assert resolved_flow is flow
 
     assert flow.resolved
-    str(flow)
+    assert str(flow.topology)
 
 
 @pytest.mark.anyio

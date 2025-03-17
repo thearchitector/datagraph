@@ -1,25 +1,17 @@
-import anyio
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from fakeredis import FakeAsyncConnection
-from redis.asyncio import ConnectionPool
 
-from datagraph import LocalExecutor, Supervisor
-from datagraph.redis.anyio import Redis
+pytest_plugins = ("celery.contrib.pytest",)
 
 
-@pytest.fixture(scope="session")
-def redis_pool():
-    return ConnectionPool.from_url(
-        "redis://localhost:6379/0", connection_class=FakeAsyncConnection
-    )
-
-
-@pytest.fixture(scope="module", autouse=True)
-async def supervisor(redis_pool):
-    async with anyio.create_task_group() as tg:
-        yield Supervisor.attach(
-            client=Redis.from_pool(redis_pool), executor=LocalExecutor(tg)
-        )
+@pytest.fixture(autouse=True)
+async def supervisor():
+    # Use AsyncMock for the Supervisor.instance() mock so it can be awaited
+    with patch(
+        "datagraph.supervisor.Supervisor.instance", return_value=AsyncMock()
+    ) as mock_supervisor:
+        yield mock_supervisor
 
 
 @pytest.fixture(

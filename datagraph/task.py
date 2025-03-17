@@ -106,7 +106,9 @@ class TaskRunner:
         return resolved_io_args
 
     async def _run(self, flow_execution_uuid: "UUID") -> None:
-        plan = await Supervisor.instance._load_flow_execution_plan(flow_execution_uuid)
+        plan = await Supervisor.instance()._load_flow_execution_plan(
+            flow_execution_uuid
+        )
         inputs = await self._prepare_inputs(plan)
 
         task_fn: "TaskFn" = _get_resolved_fn(self.fn)
@@ -133,5 +135,5 @@ class TaskRunner:
             sniffio.current_async_library()
             return self._run(flow_execution_uuid)
         except sniffio.AsyncLibraryNotFoundError:
-            with Supervisor.instance.async_portal as portal:
+            with Supervisor.instance().async_portal as portal:
                 portal.call(self._run, flow_execution_uuid)

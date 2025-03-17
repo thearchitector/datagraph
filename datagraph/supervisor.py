@@ -1,4 +1,3 @@
-import warnings
 from typing import TYPE_CHECKING, cast
 
 from anyio.from_thread import BlockingPortalProvider
@@ -8,7 +7,7 @@ from .config import Config
 from .serialization import PicklingZstdSerializer
 
 if TYPE_CHECKING:  # pragma: no cover
-    from typing import Any, ClassVar, Self
+    from typing import Any, ClassVar
     from uuid import UUID
 
     from redis.asyncio import Redis
@@ -43,26 +42,22 @@ class Supervisor:
             backend=async_config.get("backend", "asyncio"), backend_options=async_config
         )
 
-        # Set the class variable to this instance
-        Supervisor._instance = self
+    @classmethod
+    def instance(cls) -> "Supervisor":
+        """Get the global Supervisor instance."""
+        if cls._instance is None:
+            raise RuntimeError(
+                "Supervisor is not available. Call Supervisor.attach() first."
+            )
+
+        return cls._instance
 
     @classmethod
     def attach(cls, *args: "Any", **kwargs: "Any") -> "Supervisor":
-        # If an instance already exists, return it instead of creating a new one
-        if cls._instance is not None:
-            warnings.warn(
-                "Supervisor has already been attached. It will be replaced.",
-                stacklevel=2,
-            )
-        return cls(*args, **kwargs)
-
-    @classmethod
-    @property
-    def instance(cls: type["Self"]) -> "Self":
-        if not cls._instance:
-            raise RuntimeError("Supervisor is not available.")
-
-        return cls._instance
+        """Create or replace the global Supervisor instance."""
+        instance = cls(*args, **kwargs)
+        cls._instance = instance
+        return instance
 
     async def start_flow(
         self,

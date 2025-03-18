@@ -17,7 +17,8 @@ def test_attach_supervisor(monkeypatch):
     """Test that the attach method sets the instance correctly."""
     monkeypatch.setattr(Supervisor, "_instance", None)
 
-    supervisor = Supervisor.attach(client=MagicMock(), executor=MagicMock())
+    supervisor = Supervisor.attach(redis_config=MagicMock(), executor=MagicMock())
 
     assert Supervisor._instance is supervisor
     assert Supervisor.instance() is supervisor
+    supervisor.shutdown()

@@ -77,3 +77,22 @@ async def _consumer(
     async for val in produced.stream():
         yield IOVal(name="consumed", value=(val[0], time.time()))
         await anyio.sleep(0.01)
+
+
+first = Task(name="first", outputs={"a"})
+
+
+@first
+async def _first() -> AsyncIterator[IOVal[int]]:
+    for i in range(10):
+        yield IOVal(name="a", value=i)
+
+
+# define a task 'second' that waits on its input 'a' before being schedulable
+# 'second' will be placed into a second partition
+second = Task(name="second", inputs={"a"}, outputs={"b"}, wait=True)
+
+
+@second
+async def _second(a: IO[int]) -> AsyncIterator[IOVal[int]]:
+    yield IOVal(name="b", value=sum([a_val async for a_val in a.stream()]))

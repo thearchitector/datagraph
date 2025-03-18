@@ -16,9 +16,9 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from redis.asyncio.client import Redis
 
-    from .flow import Flow, FlowExecutionPlan
-    from .io import IOVal
-    from .task import Task
+    from datagraph.flow import Flow, FlowExecutionPlan
+    from datagraph.io import IOVal
+    from datagraph.task import Task
 
 
 class Executor(ABC):
@@ -26,6 +26,9 @@ class Executor(ABC):
         self, flow: "Flow", inputs: list["IOVal[Any]"] = None, all_outputs: bool = False
     ) -> dict[str, "IO[Any]"]:
         """Start a Flow."""
+        if inputs is None:
+            inputs = []
+
         # ensure the Flow is runnable
         if not flow.resolved:
             raise UnresolvedFlowError()
@@ -52,7 +55,7 @@ class Executor(ABC):
             await pipe.execute()
 
         # kickoff the plan
-        await self._advance(flow.execution_plan)
+        await self.advance(flow.execution_plan)
 
         if all_outputs:
             return {
@@ -68,39 +71,34 @@ class Executor(ABC):
                 for output in task.outputs
             }
 
-    async def _advance(self, flow_execution_plan: "FlowExecutionPlan") -> None:
+    async def advance(self, flow_execution_plan: "FlowExecutionPlan") -> None:
         """
         Advances the Flow's execution plan by one partition if the current partition is
         complete.
         """
-        try:
-            async with Supervisor.instance().client.lock(
-                f"flow:{flow_execution_plan.uuid}:execution-lock",
-                blocking=True,
-                blocking_timeout=(
-                    Supervisor.instance().config.flow_execution_advancement_timeout
-                ),
-            ):
-                if not await flow_execution_plan.partition_complete(
-                    Supervisor.instance().client
+
+        if await flow_execution_plan.partition_complete():
+            try:
+                async with Supervisor.instance().client.lock(
+                    f"flow:{flow_execution_plan.uuid}:execution-lock",
+                    blocking=True,
+                    blocking_timeout=(
+                        Supervisor.instance().config.flow_execution_advancement_timeout
+                    ),
                 ):
-                    try:
-                        partition: set["Task"] = flow_execution_plan.proceed()
+                    partition: set["Task"] = flow_execution_plan.proceed()
 
-                        # save the execution plan
-                        await Supervisor.instance().client.set(
-                            f"flow:{flow_execution_plan.uuid}",
-                            Supervisor.instance().serializer.dump(flow_execution_plan),
-                        )
-
-                        await self.dispatch(flow_execution_plan, partition)
-                    except IndexError:
-                        await self._finish(
-                            Supervisor.instance().client, flow_execution_plan
-                        )
-
-        except LockError as e:
-            raise FlowExecutionAdvancementTimeout(flow_execution_plan.uuid) from e
+                    # save the execution plan
+                    await Supervisor.instance().client.set(
+                        f"flow:{flow_execution_plan.uuid}",
+                        Supervisor.instance().serializer.dump(flow_execution_plan),
+                    )
+            except LockError as e:
+                raise FlowExecutionAdvancementTimeout(flow_execution_plan.uuid) from e
+            except IndexError:
+                await self._finish(Supervisor.instance().client, flow_execution_plan)
+            else:
+                await self.dispatch(flow_execution_plan, partition)
 
     async def _finish(
         self, client: "Redis[bytes]", flow_execution_plan: "FlowExecutionPlan"

@@ -71,6 +71,14 @@ class IOStreamTimeout(FlowExecutionError):
         )
 
 
+class UnregisteredTaskError(FlowExecutionError):
+    def __init__(self, task_name: str) -> None:
+        super().__init__(
+            f"Task '{task_name}' is not defined in the current runtime."
+            f" Register it to a function with `@{task_name}`."
+        )
+
+
 ##
 ## IO
 ##

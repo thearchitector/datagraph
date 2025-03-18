@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from anyio.streams.memory import MemoryObjectSendStream
     from redis.asyncio import Redis
 
-    from .flow import FlowExecutionPlan
+    from .flow_execution_plan import FlowExecutionPlan
     from .serialization import Serializer
 
     U = TypeVar("U")
@@ -88,7 +88,7 @@ class IO(Generic[T]):
                 # no message in the blocking window and the stream is complete, so
                 # there's a pretty solid chance we won't ever stream more info
                 if not raw_message:
-                    if await self._client.get(self._completion_key) == b"true":
+                    if await self.is_complete():
                         break
                     elif (
                         current_time() - last_stream_read
@@ -114,7 +114,7 @@ class IO(Generic[T]):
             raise e
 
     async def first(self) -> T:
-        return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))
+        return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))  # noqa: F821
 
     # async def latest(self) -> T:
     #     return await anext(self.stream(cursor=StreamCursor.FROM_LATEST))
@@ -163,4 +163,7 @@ class IO(Generic[T]):
         )
 
     async def complete(self) -> None:
-        await self._client.set(self._completion_key, "true")
+        await self._client.set(self._completion_key, b"true")
+
+    async def is_complete(self) -> bool:
+        return await self._client.get(self._completion_key) == b"true"

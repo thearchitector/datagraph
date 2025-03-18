@@ -2,34 +2,12 @@
 Flow module for the DataGraph framework.
 """
 
-from typing import TYPE_CHECKING
-from uuid import UUID, uuid4
-
 import networkx as nx
-from pydantic import BaseModel, Field
 
 from .exceptions import CyclicFlowError, DuplicateIOError, UnresolvedFlowError
+from .flow_execution_plan import FlowExecutionPlan
 from .task import Task
 from .topology import Topology
-
-if TYPE_CHECKING:  # pragma: no cover
-    from redis.asyncio.client import Pipeline
-
-
-class FlowExecutionPlan(BaseModel):
-    uuid: UUID = Field(default_factory=uuid4)
-    partitions: list[set[Task]]
-    current_partition: int = -1
-
-    async def partition_complete(self, pipeline: "Pipeline") -> bool:
-        # TODO: use uuid to resolve IO all tasks in current partition
-        # check that every task's `flow:{flow_uuid}:tasks:{name}:done` key
-        # is set
-        return self.current_partition == len(self.partitions) - 1
-
-    def proceed(self) -> set["Task"]:
-        self.current_partition += 1
-        return self.partitions[self.current_partition]
 
 
 class Flow:

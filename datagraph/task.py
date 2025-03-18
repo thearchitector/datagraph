@@ -1,10 +1,10 @@
 import inspect
+import warnings
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, get_origin
 
 import anyio
-import sniffio
 from fast_depends import Depends, inject
 from fast_depends.use import solve_async_gen
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,19 +29,12 @@ class Task(BaseModel):
     outputs: frozenset[str] = Field(default_factory=frozenset)
     wait: bool = False
 
-    _runner: "TaskRunner | None" = None
-
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     def __call__(self, fn: "TaskFn") -> "TaskRunner":
-        self._runner = TaskRunner(task=self, fn=fn)
-        return self._runner
-
-    def __getstate__(self) -> dict[str, "Any"]:
-        state = super().__getstate__()
-        # the task runner is not serializable, nor would we want it to be
-        state.get("__pydantic_private__", {}).pop("_runner", None)
-        return state
+        runner = TaskRunner(task=self, fn=fn)
+        Supervisor.register_task(self, runner)
+        return runner
 
 
 @lru_cache
@@ -106,34 +99,46 @@ class TaskRunner:
         return resolved_io_args
 
     async def _run(self, flow_execution_uuid: "UUID") -> None:
-        plan = await Supervisor.instance()._load_flow_execution_plan(
-            flow_execution_uuid
+        plan = await Supervisor.instance().load_flow_execution_plan(
+            flow_execution_uuid,
         )
+
         inputs = await self._prepare_inputs(plan)
+        resolved_outputs: dict[str, IO["Any"]] = {
+            output: IO(name=output, flow_execution_plan=plan, read_only=False)
+            for output in self.task.outputs
+        }
+        output_writes: dict[str, int] = {output: 0 for output in self.task.outputs}
 
         task_fn: "TaskFn" = _get_resolved_fn(self.fn)
         resolved_fn = task_fn(**inputs)
 
         if isinstance(resolved_fn, solve_async_gen):
-            resolved_outputs = {
-                output: IO(name=output, flow_execution_plan=plan, read_only=False)
-                for output in self.task.outputs
-            }
-
             async for output in resolved_fn:
                 await resolved_outputs[output.name].write(output)
-                await anyio.lowlevel.checkpoint()
-
-            async with anyio.create_task_group() as tg:
-                for output in resolved_outputs.values():
-                    tg.start_soon(output.complete)
+                output_writes[output.name] += 1
         else:
             await resolved_fn
 
+        async with anyio.create_task_group() as tg:
+            for output in resolved_outputs.values():
+                if output_writes[output.name] == 0:
+                    warnings.warn(f"Output IO '{output.name}' is empty.", stacklevel=2)
+
+                tg.start_soon(output.complete)
+
+        await Supervisor.instance().executor.advance(plan)
+
     def __call__(self, flow_execution_uuid: "UUID") -> "Awaitable[None] | None":
-        try:
-            sniffio.current_async_library()
-            return self._run(flow_execution_uuid)
-        except sniffio.AsyncLibraryNotFoundError:
-            with Supervisor.instance().async_portal as portal:
-                portal.call(self._run, flow_execution_uuid)
+        # try:
+        #     sniffio.current_async_library()
+        #     return self._run(flow_execution_uuid)
+        # except sniffio.AsyncLibraryNotFoundError:
+        #     # anyio.run(
+        #     #     self._run, flow_execution_uuid, **Supervisor.instance().async_config
+        #     # )
+        Supervisor.instance().async_portal.start_task_soon(
+            self._run,
+            flow_execution_uuid,
+            name=f"{flow_execution_uuid}:{self.task.name}",
+        )

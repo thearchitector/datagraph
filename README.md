@@ -14,12 +14,12 @@ WIP
 - async first, anyio for trio/asyncio
 - distributed first
 - decentralized
-    - tasks can be implemented in different services
+    - processors can be implemented in different services
     - no central task broker or management service
-- fastapi-style task dependency injection
+- fastapi-style processor dependency injection
 - optimistic parallel processing via directed streams
-    - since tasks operate on streams you can rely on high degrees of parallelism vs. sequential DAGs
-    - it can still be used as a workflow engine/canvas through task partitioning (tasks can wait for complete input streams before starting)
+    - since processors operate on streams you can rely on high degrees of parallelism vs. sequential DAGs
+    - it can still be used as a workflow engine/canvas through task partitioning (processors can wait for complete input streams before starting)
 - redis based
 - not complicated
     - the API is intentionally minimal and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
@@ -73,14 +73,14 @@ from redis.asyncio import Redis
 def get_multiplier():
     return 2
 
-# define some tasks with some named inputs and outputs
+# define some processors with some named inputs and outputs
 foobar = Processor(
     name="foobar",
     inputs=["foo"],
     outputs=["bar"]
 )
 
-# register the task to some function.
+# register the processor to some function.
 # this doesn't necessarily need to exist in the same repo / application / service that starts the Flow
 @foobar
 async def _foobar(
@@ -97,11 +97,11 @@ async def _foobar(
 
 
 async def main():
-    # create a flow from tasks
-    flow = Flow.from_tasks(foobar)
+    # create a flow from processors
+    flow = Flow.from_processors(foobar)
 
     # resolve the Flow. this is required, and ensures the Flow is actually executable.
-    # you can also do `.from_tasks(...).resolve()`
+    # you can also do `.from_processors(...).resolve()`
     flow.resolve()
 
     result: dict[str, IO[Any]] = await Supervisor.instance.start_flow(
@@ -116,7 +116,7 @@ async def main():
 
 
 # the Supervisor is a global singleton responsible for coordinating
-# local task execution. it is the means through which you define
+# local processor execution. it is the means through which you define
 # the Datagraph Redis client, Executor, or other configuration options.
 # this can be done anywhere in your application, either in the import scope
 # or within some entrypoint, but MUST be defined in every service that provides

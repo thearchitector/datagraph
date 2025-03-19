@@ -6,7 +6,7 @@ from anyio.lowlevel import RunVar
 from redis.asyncio import Redis
 
 from .config import Config
-from .exceptions import UnregisteredTaskError
+from .exceptions import UnregisteredProcessorError
 from .serialization import PicklingZstdSerializer
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -17,13 +17,13 @@ if TYPE_CHECKING:  # pragma: no cover
     from .flow import Flow
     from .flow_execution_plan import FlowExecutionPlan
     from .io import IO
+    from .processor import Processor, ProcessorRunner
     from .serialization import Serializer
-    from .task import Task, TaskRunner
 
 
 class Supervisor:
     _instance: "ClassVar[Supervisor | None]" = None
-    _tasks: "ClassVar[dict[Task, TaskRunner]]" = {}
+    _processors: "ClassVar[dict[Processor, ProcessorRunner]]" = {}
 
     def __init__(
         self,
@@ -84,22 +84,24 @@ class Supervisor:
         return instance
 
     @classmethod
-    def register_task(cls, task: "Task", runner: "TaskRunner") -> None:
-        if task in cls._tasks:
+    def register_processor(
+        cls, processor: "Processor", runner: "ProcessorRunner"
+    ) -> None:
+        if processor in cls._processors:
             warnings.warn(
-                f"Task '{task.name}' is already registered. This will override that"
+                f"Processor '{processor.name}' is already registered. This will override that"
                 " implementation.",
                 stacklevel=3,
             )
 
-        cls._tasks[task] = runner
+        cls._processors[processor] = runner
 
     @classmethod
-    def get_task_runner(cls, task: "Task") -> "TaskRunner":
-        if runner := cls._tasks.get(task):
+    def get_processor_runner(cls, processor: "Processor") -> "ProcessorRunner":
+        if runner := cls._processors.get(processor):
             return runner
 
-        raise UnregisteredTaskError(task.name)
+        raise UnregisteredProcessorError(processor.name)
 
     @property
     def client(self) -> "Redis[bytes]":

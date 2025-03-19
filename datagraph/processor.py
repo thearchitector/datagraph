@@ -21,10 +21,10 @@ if TYPE_CHECKING:  # pragma: no cover
     from .flow import FlowExecutionPlan
     from .io import IOVal
 
-    TaskFn = Callable[..., AsyncIterator[IOVal[Any]] | Awaitable[IOVal[Any]]]
+    ProcessorFn = Callable[..., AsyncIterator[IOVal[Any]] | Awaitable[IOVal[Any]]]
 
 
-class Task(BaseModel):
+class Processor(BaseModel):
     name: str
     inputs: frozenset[str] = Field(default_factory=frozenset)
     outputs: frozenset[str] = Field(default_factory=frozenset)
@@ -32,9 +32,9 @@ class Task(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    def __call__(self, fn: "TaskFn") -> "TaskRunner":
-        runner = TaskRunner(task=self, fn=fn)
-        Supervisor.register_task(self, runner)
+    def __call__(self, fn: "ProcessorFn") -> "ProcessorRunner":
+        runner = ProcessorRunner(processor=self, fn=fn)
+        Supervisor.register_processor(self, runner)
         return runner
 
 
@@ -53,22 +53,22 @@ def _get_available_parameters(fn) -> dict[str, dict[str, bool]]:
 
 
 @lru_cache(maxsize=None)
-def _get_resolved_fn(fn: "TaskFn") -> "TaskFn":
+def _get_resolved_fn(fn: "ProcessorFn") -> "ProcessorFn":
     return inject(fn)
 
 
 @dataclass
-class TaskRunner:
-    task: Task
-    fn: "TaskFn"
+class ProcessorRunner:
+    processor: Processor
+    fn: "ProcessorFn"
 
     def __post_init__(self) -> None:
-        self.__name__ = self.task.name
+        self.__name__ = self.processor.name
 
     async def _prepare_inputs(
         self, flow_execution_plan: "FlowExecutionPlan"
     ) -> dict[str, IO]:
-        input_names: set[str] = self.task.inputs
+        input_names: set[str] = self.processor.inputs
 
         parameters = _get_available_parameters(self.fn)
         resolved_io_args: dict[str, IO] = {
@@ -94,7 +94,7 @@ class TaskRunner:
             parameters.keys() - resolved_io_args.keys() - resolved_optional_args
         ):
             raise ValueError(
-                f"Task {self.task.name} has unresolvable parameters: {missing_args}"
+                f"Processor {self.processor.name} has unresolvable parameters: {missing_args}"
             )
 
         return resolved_io_args
@@ -107,12 +107,12 @@ class TaskRunner:
         inputs = await self._prepare_inputs(plan)
         resolved_outputs: dict[str, IO["Any"]] = {
             output: IO(name=output, flow_execution_plan=plan, read_only=False)
-            for output in self.task.outputs
+            for output in self.processor.outputs
         }
-        output_writes: dict[str, int] = {output: 0 for output in self.task.outputs}
+        output_writes: dict[str, int] = {output: 0 for output in self.processor.outputs}
 
-        task_fn: "TaskFn" = _get_resolved_fn(self.fn)
-        resolved_fn = task_fn(**inputs)
+        processor_fn: "ProcessorFn" = _get_resolved_fn(self.fn)
+        resolved_fn = processor_fn(**inputs)
 
         if isinstance(resolved_fn, solve_async_gen):
             async for output in resolved_fn:
@@ -134,12 +134,12 @@ class TaskRunner:
         try:
             sniffio.current_async_library()
             raise RuntimeError(
-                "Calling tasks directly within an event loop is forbidden as it relies"
+                "Calling processors directly within an event loop is forbidden as it relies"
                 " on dispatching to an external event loop. Use `.run` instead."
             )
         except sniffio.AsyncLibraryNotFoundError:
             Supervisor.instance().async_portal.start_task_soon(
                 self.run,
                 flow_execution_uuid,
-                name=f"{flow_execution_uuid}:{self.task.name}",
+                name=f"{flow_execution_uuid}:{self.processor.name}",
             )

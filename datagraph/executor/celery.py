@@ -2,17 +2,20 @@ from typing import TYPE_CHECKING
 
 from .base import Executor
 
-if TYPE_CHECKING:  # pragma: no cover
+try:
     from celery import Celery
+except ImportError:
+    raise RuntimeError("Celery is required to use the CeleryExecutor.") from None
 
+if TYPE_CHECKING:  # pragma: no cover
     from datagraph.flow import FlowExecutionPlan
-    from datagraph.task import Task
+    from datagraph.processor import Processor
 
 
 class CeleryExecutor(Executor):
     """
-    An Executor for running Flows via Celery. All Tasks in the Flow must be registered
-    as Celery tasks in the worker that implements them.
+    An Executor for running Flows via Celery. All Processors in the Flow must be registered
+    as Celery processors in the worker that implements them.
 
     ```python
     celery_app = Celery()
@@ -21,7 +24,7 @@ class CeleryExecutor(Executor):
         executor=CeleryExecutor(celery_app),
     )
 
-    foo = Task(name="foo", inputs={"a"}, outputs={"b"})
+    foo = Processor(name="foo", inputs={"a"}, outputs={"b"})
 
     @celery_app.task(foo.name, ignore_result=True)
     @foo
@@ -33,7 +36,7 @@ class CeleryExecutor(Executor):
         self.celery_app = app
 
     async def dispatch(
-        self, flow_execution_plan: "FlowExecutionPlan", tasks: set["Task"]
+        self, flow_execution_plan: "FlowExecutionPlan", processors: set["Processor"]
     ) -> None:
-        for task in tasks:
-            self.celery_app.send_task(task.name, args=[flow_execution_plan.uuid])
+        for processor in processors:
+            self.celery_app.send_task(processor.name, args=[flow_execution_plan.uuid])

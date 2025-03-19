@@ -38,6 +38,8 @@ uvloop = "^0.21.0"
 
 [tool.poetry.group.lint.dependencies]
 mypy = "^1.15.0"
+types-networkx = "^3.4.2.20250319"
+celery-types = "^0.23.0"
 
 [tool.pytest.ini_options]
 addopts = "-ra -vv --cov=datagraph --cov-report=html --cov-report=term --cov-branch"

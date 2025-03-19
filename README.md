@@ -66,7 +66,7 @@ This is a contrived example, but illustrates many of the basic features you'd wa
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from datagraph import Depends, IO, LocalExecutor, Flow, Supervisor, Task
+from datagraph import Depends, IO, LocalExecutor, Flow, Supervisor, Processor
 from redis.asyncio import Redis
 
 # some externally-defined 'thing'
@@ -74,7 +74,7 @@ def get_multiplier():
     return 2
 
 # define some tasks with some named inputs and outputs
-foobar = Task(
+foobar = Processor(
     name="foobar",
     inputs=["foo"],
     outputs=["bar"]
@@ -105,10 +105,10 @@ async def main():
     flow.resolve()
 
     result: dict[str, IO[Any]] = await Supervisor.instance.start_flow(
-        flow, 
+        flow,
         inputs=[IOVal(name="foo", value=5)]
     )
-    
+
     # concurrently stream the results as they complete. this will loop until foobar
     # has yielded all it's values to the 'bar' IO stream
     async for val in result["bar"].stream():
@@ -120,7 +120,7 @@ async def main():
 # the Datagraph Redis client, Executor, or other configuration options.
 # this can be done anywhere in your application, either in the import scope
 # or within some entrypoint, but MUST be defined in every service that provides
-# an implementation for a Task.
+# an implementation for a Processor.
 #
 # nothing _strictly_ requires the executor to match across all services, but properly handling
 # that behavior is undefined / unsupported.

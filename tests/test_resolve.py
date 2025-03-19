@@ -1,16 +1,16 @@
 import pytest
 
-from datagraph import Flow, Task
+from datagraph import Flow, Processor
 from datagraph.exceptions import CyclicFlowError, DuplicateIOError, UnresolvedFlowError
 
-foo = Task(name="foo", inputs={"a"}, outputs={"b"})
-bar = Task(name="bar", inputs={"b"}, outputs={"a"})
-foobar = Task(name="foobar", inputs={"a", "b"}, outputs={"c"})
+foo = Processor(name="foo", inputs={"a"}, outputs={"b"})
+bar = Processor(name="bar", inputs={"b"}, outputs={"a"})
+foobar = Processor(name="foobar", inputs={"a", "b"}, outputs={"c"})
 
 
 @pytest.mark.anyio
 async def test_resolution_required(supervisor):
-    flow = Flow.from_tasks(foo)
+    flow = Flow.from_processors(foo)
 
     assert not flow.resolved
 
@@ -27,7 +27,7 @@ async def test_resolution_required(supervisor):
 
 @pytest.mark.anyio
 async def test_resolution_failure_cyclic():
-    flow = Flow.from_tasks(foo, bar)
+    flow = Flow.from_processors(foo, bar)
 
     with pytest.raises(CyclicFlowError):
         flow.resolve()
@@ -35,15 +35,15 @@ async def test_resolution_failure_cyclic():
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "tasks",
+    "processors",
     (
         (foo,),
         (foo, foobar),
     ),
     ids=("simple", "complex"),
 )
-async def test_resolve(tasks):
-    flow = Flow.from_tasks(*tasks).resolve()
+async def test_resolve(processors):
+    flow = Flow.from_processors(*processors).resolve()
 
     assert flow.topology
     assert flow.execution_plan
@@ -51,11 +51,11 @@ async def test_resolve(tasks):
 
 @pytest.mark.anyio
 async def test_duplicate_output_validation():
-    # Create two tasks that produce the same output
-    task1 = Task(name="task1", outputs={"same_output"})
-    task2 = Task(name="task2", outputs={"same_output"})
+    # Create two processors that produce the same output
+    processor1 = Processor(name="processor1", outputs={"same_output"})
+    processor2 = Processor(name="processor2", outputs={"same_output"})
 
-    flow = Flow.from_tasks(task1, task2)
+    flow = Flow.from_processors(processor1, processor2)
 
     # Resolving the flow should raise a ValueError
     with pytest.raises(DuplicateIOError):

@@ -5,7 +5,7 @@ from celery import shared_task
 from datagraph import IO, Flow, IOVal, LocalExecutor, Supervisor
 from datagraph.executor.celery import CeleryExecutor
 
-from .tasks import bar, consumer, first, foo, foobar, producer, second
+from .processors import bar, consumer, first, foo, foobar, producer, second
 
 
 @pytest.fixture(params=[LocalExecutor, CeleryExecutor], ids=("local", "celery"))
@@ -18,7 +18,15 @@ async def supervisor(request, monkeypatch):
             executor=LocalExecutor(),
         )
     elif request.param == CeleryExecutor:
-        from .tasks import _bar, _consumer, _first, _foo, _foobar, _producer, _second
+        from .processors import (
+            _bar,
+            _consumer,
+            _first,
+            _foo,
+            _foobar,
+            _producer,
+            _second,
+        )
 
         shared_task(name=foo.name, ignore_result=True)(_foo)
         shared_task(name=bar.name, ignore_result=True)(_bar)
@@ -42,7 +50,7 @@ async def supervisor(request, monkeypatch):
 
 @pytest.mark.anyio
 async def test_flow_simple(supervisor):
-    flow = Flow.from_tasks(foo).resolve()
+    flow = Flow.from_processors(foo).resolve()
 
     with anyio.fail_after(30):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -66,7 +74,7 @@ async def test_flow_simple(supervisor):
 
 @pytest.mark.anyio
 async def test_flow_dual_output(supervisor):
-    flow = Flow.from_tasks(foo, bar).resolve()
+    flow = Flow.from_processors(foo, bar).resolve()
 
     with anyio.fail_after(30):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -87,7 +95,7 @@ async def test_flow_dual_output(supervisor):
 
 @pytest.mark.anyio
 async def test_flow_complex(supervisor):
-    flow = Flow.from_tasks(foo, bar, foobar).resolve()
+    flow = Flow.from_processors(foo, bar, foobar).resolve()
 
     with anyio.fail_after(30):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -108,7 +116,7 @@ async def test_flow_complex(supervisor):
 
 @pytest.mark.anyio
 async def test_flow_interlaced(supervisor):
-    flow = Flow.from_tasks(producer, consumer).resolve()
+    flow = Flow.from_processors(producer, consumer).resolve()
 
     with anyio.fail_after(30):
         outputs = await supervisor.start_flow(
@@ -142,7 +150,7 @@ async def test_flow_interlaced(supervisor):
 
 @pytest.mark.anyio
 async def test_flow_sequential(supervisor):
-    flow = Flow.from_tasks(first, second).resolve()
+    flow = Flow.from_processors(first, second).resolve()
 
     with anyio.fail_after(30):
         outputs = await supervisor.start_flow(flow)

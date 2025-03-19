@@ -6,29 +6,29 @@ import networkx as nx
 
 from .exceptions import CyclicFlowError, DuplicateIOError, UnresolvedFlowError
 from .flow_execution_plan import FlowExecutionPlan
-from .task import Task
+from .processor import Processor
 from .topology import Topology
 
 
 class Flow:
-    def __init__(self, tasks: list[Task]) -> None:
-        self.tasks = tasks
+    def __init__(self, processors: list[Processor]) -> None:
+        self.processors = processors
         self._topology: Topology | None = None
         self._execution_plan: FlowExecutionPlan | None = None
 
     @classmethod
-    def from_tasks(cls, *tasks: Task) -> "Flow":
-        return cls(tasks=list(tasks))
+    def from_processors(cls, *processors: Processor) -> "Flow":
+        return cls(processors=list(processors))
 
     def resolve(self) -> "Flow":
         all_inputs = set()
         all_outputs = set()
 
-        # validate that no output is produced by multiple tasks
-        for task in self.tasks:
-            all_inputs.update(task.inputs)
+        # validate that no output is produced by multiple processors
+        for processor in self.processors:
+            all_inputs.update(processor.inputs)
 
-            for out in task.outputs:
+            for out in processor.outputs:
                 if out in all_outputs:
                     raise DuplicateIOError()
 
@@ -37,27 +37,30 @@ class Flow:
         # create a directed graph to represent the flow
         digraph = nx.DiGraph()
 
-        # add all tasks as nodes
-        for task in self.tasks:
-            digraph.add_node(task)
+        # add all processors as nodes
+        for processor in self.processors:
+            digraph.add_node(processor)
 
-        # connect tasks based on matching input/output names
-        for src_task in self.tasks:
-            for src_out in src_task.outputs:
-                for dst_task in self.tasks:
-                    for dst_in in dst_task.inputs:
+        # connect processors based on matching input/output names
+        for src_processor in self.processors:
+            for src_out in src_processor.outputs:
+                for dst_processor in self.processors:
+                    for dst_in in dst_processor.inputs:
                         if src_out == dst_in:
-                            digraph.add_edge(src_task, dst_task, io_name=src_out)
+                            digraph.add_edge(
+                                src_processor, dst_processor, io_name=src_out
+                            )
 
         try:
             order = list(nx.topological_sort(digraph))
         except nx.NetworkXUnfeasible as e:
-            # Find cycles and convert Task objects to their names for the error message
+            # Find cycles and convert Processor objects to their names for the error message
             cycles = nx.simple_cycles(digraph)
 
             # Sort cycles by length for better error reporting
             sorted_cycles = sorted(
-                (tuple(task.name for task in cycle) for cycle in cycles), key=len
+                (tuple(processor.name for processor in cycle) for cycle in cycles),
+                key=len,
             )
 
             raise CyclicFlowError(sorted_cycles) from e
@@ -70,17 +73,17 @@ class Flow:
         return self
 
     def _create_execution_plan(self) -> FlowExecutionPlan:
-        # TODO: be smarter with partitioning? how to treat tasks in the same
+        # TODO: be smarter with partitioning? how to treat processors in the same
         # topological level when one+ of them waits
-        partitions: list[set[Task]] = []
+        partitions: list[set[Processor]] = []
         current_partition = set()
 
-        for task in self._topology.order:
-            if task.wait and current_partition:
+        for processor in self._topology.order:
+            if processor.wait and current_partition:
                 partitions.append(current_partition)
-                current_partition = {task}
+                current_partition = {processor}
             else:
-                current_partition.add(task)
+                current_partition.add(processor)
 
         if current_partition:
             partitions.append(current_partition)

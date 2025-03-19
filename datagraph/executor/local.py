@@ -8,20 +8,21 @@ from .base import Executor
 
 if TYPE_CHECKING:  # pragma: no cover
     from datagraph.flow import FlowExecutionPlan
-    from datagraph.task import Task
+    from datagraph.processor import Processor
 
 
 class LocalExecutor(Executor):
     """
-    An Executor for running Flows locally. All Tasks in the Flow must be defined in
+    An Executor for running Flows locally. All Processors in the Flow must be defined in
     the current program context.
     """
 
     async def dispatch(
-        self, flow_execution_plan: "FlowExecutionPlan", tasks: set["Task"]
+        self, flow_execution_plan: "FlowExecutionPlan", processors: set["Processor"]
     ) -> None:
         async with anyio.create_task_group() as tg:
-            for task in tasks:
+            for processor in processors:
                 tg.start_soon(
-                    Supervisor.get_task_runner(task).run, flow_execution_plan.uuid
+                    Supervisor.get_processor_runner(processor).run,
+                    flow_execution_plan.uuid,
                 )

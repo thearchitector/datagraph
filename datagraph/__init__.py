@@ -3,8 +3,8 @@ from fast_depends import Depends
 from .executor import Executor, LocalExecutor
 from .flow import Flow
 from .io import IO, IOVal
+from .processor import Processor
 from .supervisor import Supervisor
-from .task import Task
 
 __all__ = [
     "Depends",
@@ -14,5 +14,5 @@ __all__ = [
     "IO",
     "IOVal",
     "Supervisor",
-    "Task",
+    "Processor",
 ]

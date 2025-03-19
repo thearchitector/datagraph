@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from datagraph.flow import Flow, FlowExecutionPlan
     from datagraph.io import IOVal
-    from datagraph.task import Task
+    from datagraph.processor import Processor
 
 
 class Executor(ABC):
@@ -61,14 +61,14 @@ class Executor(ABC):
             return {
                 output: IO(output, flow.execution_plan, read_only=True)
                 for p in flow.execution_plan.partitions
-                for task in p
-                for output in task.outputs
+                for processor in p
+                for output in processor.outputs
             }
         else:
             return {
                 output: IO(output, flow.execution_plan, read_only=True)
-                for task in flow.execution_plan.partitions[-1]
-                for output in task.outputs
+                for processor in flow.execution_plan.partitions[-1]
+                for output in processor.outputs
             }
 
     async def advance(self, flow_execution_plan: "FlowExecutionPlan") -> None:
@@ -86,7 +86,7 @@ class Executor(ABC):
                         Supervisor.instance().config.flow_execution_advancement_timeout
                     ),
                 ):
-                    partition: set["Task"] = flow_execution_plan.proceed()
+                    partition: set["Processor"] = flow_execution_plan.proceed()
 
                     # save the execution plan
                     await Supervisor.instance().client.set(
@@ -107,6 +107,6 @@ class Executor(ABC):
 
     @abstractmethod
     async def dispatch(
-        self, flow_execution_plan: "FlowExecutionPlan", tasks: set["Task"]
+        self, flow_execution_plan: "FlowExecutionPlan", processors: set["Processor"]
     ) -> None:
         raise NotImplementedError()

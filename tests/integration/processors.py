@@ -3,12 +3,12 @@ from collections.abc import AsyncIterator
 
 import anyio
 
-from datagraph import IO, IOVal, Task
+from datagraph import IO, IOVal, Processor
 
-# define a task with a name 'foo'
+# define a processor with a name 'foo'
 # that expects some input stream 'a'
 # and outputs two streams 'b' and 'c'
-foo = Task(name="foo", inputs={"a"}, outputs={"b", "c"})
+foo = Processor(name="foo", inputs={"a"}, outputs={"b", "c"})
 
 
 @foo
@@ -21,10 +21,10 @@ async def _foo(a: IO[int]) -> AsyncIterator[IOVal[int]]:
         yield IOVal(name="c", value=i)
 
 
-# define a task named 'bar'
+# define a processor named 'bar'
 # that expects streams 'b' and 'c'
 # and outputs a stream 'd'
-bar = Task(name="bar", inputs={"b", "c"}, outputs={"d"})
+bar = Processor(name="bar", inputs={"b", "c"}, outputs={"d"})
 
 
 @bar
@@ -35,9 +35,9 @@ async def _bar(b: IO[int], c: IO[int]) -> AsyncIterator[IOVal[int]]:
         yield IOVal(name="d", value=b_val + c_val)
 
 
-# define some task foobar
+# define some processor foobar
 # that expects 4 inputs streams 'a', 'b', 'c', 'd'
-foobar = Task(name="foobar", inputs={"a", "b", "c", "d"}, outputs={"e"})
+foobar = Processor(name="foobar", inputs={"a", "b", "c", "d"}, outputs={"e"})
 
 
 @foobar
@@ -55,7 +55,7 @@ async def _foobar(
         yield IOVal(name="e", value=a_val + b_val + c_val + d_val)
 
 
-producer = Task(name="producer", inputs={"input"}, outputs={"produced"})
+producer = Processor(name="producer", inputs={"input"}, outputs={"produced"})
 
 
 @producer
@@ -67,7 +67,7 @@ async def _producer(input: IO[int]) -> AsyncIterator[IOVal[tuple[int, float]]]:
         await anyio.sleep(0.01)
 
 
-consumer = Task(name="consumer", inputs={"produced"}, outputs={"consumed"})
+consumer = Processor(name="consumer", inputs={"produced"}, outputs={"consumed"})
 
 
 @consumer
@@ -79,7 +79,7 @@ async def _consumer(
         await anyio.sleep(0.01)
 
 
-first = Task(name="first", outputs={"a"})
+first = Processor(name="first", outputs={"a"})
 
 
 @first
@@ -88,9 +88,9 @@ async def _first() -> AsyncIterator[IOVal[int]]:
         yield IOVal(name="a", value=i)
 
 
-# define a task 'second' that waits on its input 'a' before being schedulable
+# define a processor 'second' that waits on its input 'a' before being schedulable
 # 'second' will be placed into a second partition
-second = Task(name="second", inputs={"a"}, outputs={"b"}, wait=True)
+second = Processor(name="second", inputs={"a"}, outputs={"b"}, wait=True)
 
 
 @second

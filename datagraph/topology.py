@@ -5,12 +5,12 @@ from networkx import generate_network_text
 if TYPE_CHECKING:  # pragma: no cover
     from networkx import DiGraph
 
-    from .task import Task
+    from .processor import Processor
 
 
 class Topology:
     def __init__(
-        self, *, digraph: "DiGraph", order: list["Task"], floating_inputs: set[str]
+        self, *, digraph: "DiGraph", order: list["Processor"], floating_inputs: set[str]
     ) -> None:
         self.digraph = digraph
         self.order = order

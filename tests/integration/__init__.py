@@ -4,12 +4,12 @@ from collections.abc import AsyncIterator
 import anyio
 import pytest
 
-from datagraph import IO, Flow, IOVal, Task
+from datagraph import IO, Flow, IOVal, Processor
 
-# define a task with a name 'foo'
+# define a processor with a name 'foo'
 # that expects some input stream 'a'
 # and outputs two streams 'b' and 'c'
-foo = Task(name="foo", inputs={"a"}, outputs={"b", "c"})
+foo = Processor(name="foo", inputs={"a"}, outputs={"b", "c"})
 
 
 @foo
@@ -23,10 +23,10 @@ async def _foo(a: IO[int]) -> AsyncIterator[IOVal[int]]:
         await anyio.lowlevel.checkpoint()
 
 
-# define a task named 'bar'
+# define a processor named 'bar'
 # that expects streams 'b' and 'c'
 # and outputs a stream 'd'
-bar = Task(name="bar", inputs={"b", "c"}, outputs={"d"})
+bar = Processor(name="bar", inputs={"b", "c"}, outputs={"d"})
 
 
 @bar
@@ -38,9 +38,9 @@ async def _bar(b: IO[int], c: IO[int]) -> AsyncIterator[IOVal[int]]:
         await anyio.lowlevel.checkpoint()
 
 
-# define some task foobar
+# define some processor foobar
 # that expects 4 inputs streams 'a', 'b', 'c', 'd'
-foobar = Task(name="foobar", inputs={"a", "b", "c", "d"}, outputs={"e"})
+foobar = Processor(name="foobar", inputs={"a", "b", "c", "d"}, outputs={"e"})
 
 
 @foobar
@@ -61,7 +61,7 @@ async def _foobar(
 
 @pytest.mark.anyio
 async def test_execute_flow_simple(supervisor):
-    flow = Flow.from_tasks(foo).resolve()
+    flow = Flow.from_processors(foo).resolve()
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -85,7 +85,7 @@ async def test_execute_flow_simple(supervisor):
 
 @pytest.mark.anyio
 async def test_execute_flow_dual_output(supervisor):
-    flow = Flow.from_tasks(foo, bar).resolve()
+    flow = Flow.from_processors(foo, bar).resolve()
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -106,7 +106,7 @@ async def test_execute_flow_dual_output(supervisor):
 
 @pytest.mark.anyio
 async def test_execute_flow_complex(supervisor):
-    flow = Flow.from_tasks(foo, bar, foobar).resolve()
+    flow = Flow.from_processors(foo, bar, foobar).resolve()
 
     with anyio.fail_after(1):
         outputs: dict[str, IO] = await supervisor.start_flow(
@@ -125,8 +125,8 @@ async def test_execute_flow_complex(supervisor):
     ]
 
 
-# Define tasks for testing interlaced execution
-producer = Task(name="producer", inputs={"input"}, outputs={"produced"})
+# Define processors for testing interlaced execution
+producer = Processor(name="producer", inputs={"input"}, outputs={"produced"})
 
 
 @producer
@@ -138,7 +138,7 @@ async def _producer(input: IO[int]) -> AsyncIterator[IOVal[tuple[int, float]]]:
         await anyio.sleep(0.01)
 
 
-consumer = Task(name="consumer", inputs={"produced"}, outputs={"consumed"})
+consumer = Processor(name="consumer", inputs={"produced"}, outputs={"consumed"})
 
 
 @consumer
@@ -152,7 +152,7 @@ async def _consumer(
 
 @pytest.mark.anyio
 async def test_execute_flow_interlaced(supervisor):
-    flow = Flow.from_tasks(producer, consumer).resolve()
+    flow = Flow.from_processors(producer, consumer).resolve()
 
     with anyio.fail_after(2):
         outputs = await supervisor.start_flow(

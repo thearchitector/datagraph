@@ -27,7 +27,9 @@ class FlowResolutionError(DatagraphError):
 
 class DuplicateIOError(FlowResolutionError):
     def __init__(self) -> None:
-        super().__init__("IO cannot be yielded by multiple tasks in a single Flow.")
+        super().__init__(
+            "IO cannot be yielded by multiple processors in a single Flow."
+        )
 
 
 class CyclicFlowError(FlowResolutionError):
@@ -71,11 +73,11 @@ class IOStreamTimeout(FlowExecutionError):
         )
 
 
-class UnregisteredTaskError(FlowExecutionError):
-    def __init__(self, task_name: str) -> None:
+class UnregisteredProcessorError(FlowExecutionError):
+    def __init__(self, processor_name: str) -> None:
         super().__init__(
-            f"Task '{task_name}' is not defined in the current runtime."
-            f" Register it to a function with `@{task_name}`."
+            f"Processor '{processor_name}' is not defined in the current runtime."
+            f" Register it to a function with `@{processor_name}`."
         )
 
 

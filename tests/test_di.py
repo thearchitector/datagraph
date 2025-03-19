@@ -28,4 +28,4 @@ async def test_task_di(supervisor, monkeypatch):
         "_load_flow_execution_plan",
         AsyncMock(return_value=FlowExecutionPlan(uuid=mock_fep_uuid, partitions=[])),
     )
-    _foo(mock_fep_uuid)
+    await _foo.run(mock_fep_uuid)

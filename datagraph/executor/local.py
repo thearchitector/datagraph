@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING
 
+import anyio
+
 from datagraph.supervisor import Supervisor
 
 from .base import Executor
@@ -18,5 +20,8 @@ class LocalExecutor(Executor):
     async def dispatch(
         self, flow_execution_plan: "FlowExecutionPlan", tasks: set["Task"]
     ) -> None:
-        for task in tasks:
-            Supervisor.get_task_runner(task)(flow_execution_plan.uuid)
+        async with anyio.create_task_group() as tg:
+            for task in tasks:
+                tg.start_soon(
+                    Supervisor.get_task_runner(task).run, flow_execution_plan.uuid
+                )

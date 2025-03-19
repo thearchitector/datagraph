@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, cast
 
 from anyio.from_thread import start_blocking_portal
 from anyio.lowlevel import RunVar
+from redis.asyncio import Redis
 
 from .config import Config
 from .exceptions import UnregisteredTaskError
-from .redis.anyio import Redis
 from .serialization import PicklingZstdSerializer
 
 if TYPE_CHECKING:  # pragma: no cover

@@ -4,22 +4,34 @@ version = "0.1.0"
 description = "An asynchronous data processing library based on dataflows."
 authors = ["Elias Gabriel <oss@eliasfgabriel.com>"]
 readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: AnyIO",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed"
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4"
-anyio = "^4.8.0"
+anyio = "^4.5.0"
 asyncstdlib = "^3.13.0"
 fast-depends = "^2.4.12"
 networkx = "^3.4.2"
 pydantic-settings = "^2.8.1"
-redis = {extras = ["hiredis"], version = "^5.2.1"}
-trio-asyncio = "^0.15.0"
+redis = {extras = ["hiredis"], git = "https://github.com/thearchitector/redis-py.git"}
 zstandard = "^0.23.0"
 
 [tool.poetry.group.dev.dependencies]
-anyio = {extras = ["trio"], version = "^4.8.0"}
+anyio = {extras = ["trio"], version = "^4.5.0"}
 celery = "^5.4.0"
-fakeredis = {extras = ["lua"], version = "^2.27.0"}
 pytest = "^8.3.5"
 pytest-cov = "^6.0.0"
 uvloop = "^0.21.0"

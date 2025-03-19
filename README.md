@@ -3,7 +3,7 @@
 An asynchronous data processing library based on dataflows. Datagraph empowers you to design declaratively, replacing the notion of "tasks" and "pipelines" with "processors" and "flows" that treat IO as continuous streams of manipulatable information.
 
 Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
-or with any other asynchronous function framework; all you need is a notion of "running a function" to implement an `Executor`.
+or with any other asynchronous function framework; all you need is a notion of "running a function by name" to implement an `Executor`.
 
 Out-of-the-box, there are `Executors` available for local execution and [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
@@ -11,7 +11,7 @@ Out-of-the-box, there are `Executors` available for local execution and [Celery]
 
 WIP
 
-- async first
+- async first, anyio for trio/asyncio
 - distributed first
 - decentralized
     - tasks can be implemented in different services
@@ -122,13 +122,13 @@ async def main():
 # or within some entrypoint, but MUST be defined in every service that provides
 # an implementation for a Task.
 #
-# nothing _strictly_ requires the non-Redis argument to match across all task
-# services, but handling that behavior is undefined / unsupported.
-Supervisor.attach(client=Redis(), executor=LocalExecutor())
+# nothing _strictly_ requires the executor to match across all services, but properly handling
+# that behavior is undefined / unsupported.
+Supervisor.attach(redis_config={"url": "redis://localhost:6379/0"}, executor=LocalExecutor())
 
 # for the sake of example, this is the same as starting a Flow from within
 # some running application service / endpoint
-anyio.run(main)
+anyio.run(main, backend="trio")
 # >>> 0
 # >>> 2
 # >>> 4

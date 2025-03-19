@@ -1,7 +1,6 @@
 import anyio
 import pytest
 from celery import shared_task
-from fakeredis import FakeAsyncConnection
 
 from datagraph import IO, Flow, IOVal, LocalExecutor, Supervisor
 from datagraph.executor.celery import CeleryExecutor
@@ -15,10 +14,7 @@ async def supervisor(request, monkeypatch):
 
     if request.param == LocalExecutor:
         yield Supervisor.attach(
-            redis_config={
-                "url": "redis://localhost:6379/0",
-                "connection_class": FakeAsyncConnection,
-            },
+            redis_config={"url": "redis://localhost:6379/0"},
             executor=LocalExecutor(),
         )
     elif request.param == CeleryExecutor:
@@ -37,10 +33,7 @@ async def supervisor(request, monkeypatch):
         _ = request.getfixturevalue("celery_worker")
 
         yield Supervisor.attach(
-            redis_config={
-                "url": "redis://localhost:6379/0",
-                "connection_class": FakeAsyncConnection,
-            },
+            redis_config={"url": "redis://localhost:6379/0"},
             executor=CeleryExecutor(celery_app),
         )
 

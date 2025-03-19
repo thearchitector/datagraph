@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, get_origin
 
 import anyio
+import sniffio
 from fast_depends import Depends, inject
 from fast_depends.use import solve_async_gen
 from pydantic import BaseModel, ConfigDict, Field
@@ -98,7 +99,7 @@ class TaskRunner:
 
         return resolved_io_args
 
-    async def _run(self, flow_execution_uuid: "UUID") -> None:
+    async def run(self, flow_execution_uuid: "UUID") -> None:
         plan = await Supervisor.instance().load_flow_execution_plan(
             flow_execution_uuid,
         )
@@ -129,16 +130,16 @@ class TaskRunner:
 
         await Supervisor.instance().executor.advance(plan)
 
-    def __call__(self, flow_execution_uuid: "UUID") -> "Awaitable[None] | None":
-        # try:
-        #     sniffio.current_async_library()
-        #     return self._run(flow_execution_uuid)
-        # except sniffio.AsyncLibraryNotFoundError:
-        #     # anyio.run(
-        #     #     self._run, flow_execution_uuid, **Supervisor.instance().async_config
-        #     # )
-        Supervisor.instance().async_portal.start_task_soon(
-            self._run,
-            flow_execution_uuid,
-            name=f"{flow_execution_uuid}:{self.task.name}",
-        )
+    def __call__(self, flow_execution_uuid: "UUID") -> "Awaitable[None]":
+        try:
+            sniffio.current_async_library()
+            raise RuntimeError(
+                "Calling tasks directly within an event loop is forbidden as it relies"
+                " on dispatching to an external event loop. Use `.run` instead."
+            )
+        except sniffio.AsyncLibraryNotFoundError:
+            Supervisor.instance().async_portal.start_task_soon(
+                self.run,
+                flow_execution_uuid,
+                name=f"{flow_execution_uuid}:{self.task.name}",
+            )

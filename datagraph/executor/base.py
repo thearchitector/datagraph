@@ -16,14 +16,18 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from redis.asyncio.client import Redis
 
-    from datagraph.flow import Flow, FlowExecutionPlan
+    from datagraph.flow import Flow
+    from datagraph.flow_execution_plan import FlowExecutionPlan
     from datagraph.io import IOVal
     from datagraph.processor import Processor
 
 
 class Executor(ABC):
     async def start(
-        self, flow: "Flow", inputs: list["IOVal[Any]"] = None, all_outputs: bool = False
+        self,
+        flow: "Flow",
+        inputs: list["IOVal[Any]"] | None = None,
+        all_outputs: bool = False,
     ) -> dict[str, "IO[Any]"]:
         """Start a Flow."""
         if inputs is None:

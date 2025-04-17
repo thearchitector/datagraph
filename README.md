@@ -1,15 +1,17 @@
 # Datagraph
 
-An asynchronous data processing library based on dataflows. Datagraph empowers you to design declaratively, replacing the notion of "tasks" and "pipelines" with "processors" and "flows" that treat IO as continuous streams of manipulatable information.
+An asynchronous data processing library based on dataflows. Datagraph empowers you to design declaratively, abstracting the notion of discrete "tasks" and "queues" into "processors" and "flows" that treat IO as continuous streams of manipulatable information.
 
 Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
 or with any other asynchronous function framework; all you need is a notion of "running a function by name" to implement an `Executor`.
 
 Out-of-the-box, there are `Executors` available for local execution and [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
+The only runtime dependency is a RESP3-compliant key/value store. Primary support is for [Valkey](https://valkey.io/).
+
 ## Features
 
-WIP
+WIP docs
 
 - async first, anyio for trio/asyncio
 - distributed first
@@ -30,13 +32,13 @@ WIP
 
 For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
 That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps, and
-finishes when the last step completes. If I have tasks A, B, and C, I can pass data into A, then it can be passed to B, then C.
+finishes when the last step completes. If you have tasks A, B, and C, you can pass data into A, then it can be passed to B, then C.
 
 In the discrete model, by definition, C cannot run until B is finished, and B cannot run until A is finished: it is serial. When you're dealing with lots of
-data, or perhaps starting with data that isn't all readily available, that begins to pose a problem. If I'm building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), my users would probably be mad if they had to wait for all 20,000 files to finish processing before they ended up in the application.
+data, or perhaps starting with data that isn't readily available in entirety, that restriction begins to pose a problem. If you're building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), your users would likely be upset if they had to wait for all 20,000 files to finish processing in steps A and B before they were loaded into the application by step C.
 
 The procedural way of dealing with this is usually three-fold, all for the purpose of stabily reducing time-to-completion:
-1. Break up the 20,000 files into more manageable groups and run multiple pipelines.
+1. Break up the 20,000 files into more manageable groups, then run multiple pipelines.
 2. Implement some mechanism for coordianting and managing those independent groups across the tasks.
     - In the example above, that would likely _also_ mean implementing some homebrew monitoring tool or integrating with something like OpenTelemetry.
 3. Rent more and bigger hardware (from AWS, etc.) and utilize some Horizontal Autoscaling-like feature so you can run 100 As, 100 Bs, and 100 Cs.
@@ -53,6 +55,8 @@ By treating data as continuous streams, you get three huge advantages:
 In this model, applications like ETL pipelines make a lot more sense. You can start processing individual files as they're uploaded, transform one while the previous is extracting, and don't need to design around buying an EC2 instance with enough RAM to store 20,000 bitmap-filled PDFs.
 
 There's also a fourth benefit. If you're writing a complex application, or just love imperative programming, you'll probably want to be able to run asynchronous tasks regardless. You can use Datagraph for that too; the benefit to defining a workflow using streams is that you can generalize procedural tasks as processors dealing in streams of 1 value.
+
+The result of all of this is a simpler but equally robust system that imparts a smaller cognitive load on your developers.
 
 ## Installation
 

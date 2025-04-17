@@ -4,11 +4,11 @@ from .base import Executor
 
 try:
     from celery import Celery
-except ImportError:
+except ImportError:  # pragma: no cover
     raise RuntimeError("Celery is required to use the CeleryExecutor.") from None
 
 if TYPE_CHECKING:  # pragma: no cover
-    from datagraph.flow import FlowExecutionPlan
+    from datagraph.flow_execution_plan import FlowExecutionPlan
     from datagraph.processor import Processor
 
 

@@ -1,4 +1,6 @@
+import atexit
 import warnings
+import weakref
 from typing import TYPE_CHECKING, cast
 
 from anyio.from_thread import start_blocking_portal
@@ -10,13 +12,14 @@ from .exceptions import UnregisteredProcessorError
 from .serialization import PicklingZstdSerializer
 
 if TYPE_CHECKING:  # pragma: no cover
+    from collections.abc import Callable
     from typing import Any, ClassVar
     from uuid import UUID
 
     from .executor import Executor
     from .flow import Flow
     from .flow_execution_plan import FlowExecutionPlan
-    from .io import IO
+    from .io import IO, IOVal
     from .processor import Processor, ProcessorRunner
     from .serialization import Serializer
 
@@ -30,7 +33,7 @@ class Supervisor:
         executor: "Executor",
         redis_config: dict[str, "Any"],
         serializer: "Serializer | None" = None,
-        async_config: dict[str, "Any"] = None,
+        async_config: dict[str, "Any"] | None = None,
         **settings: "Any",
     ) -> None:
         if Supervisor._instance is not None:
@@ -54,6 +57,10 @@ class Supervisor:
         )
         self.async_portal = self._portal_cm.__enter__()
 
+        self._is_shutdown = False
+        weakref.finalize(self, Supervisor._shutdown, weakref.ref(self))
+        atexit.register(Supervisor._shutdown, weakref.ref(self))
+
     @classmethod
     def instance(cls) -> "Supervisor":
         """Get the global Supervisor instance."""
@@ -70,7 +77,7 @@ class Supervisor:
         executor: "Executor",
         redis_config: dict[str, "Any"],
         serializer: "Serializer | None" = None,
-        async_config: dict[str, "Any"] = None,
+        async_config: dict[str, "Any"] | None = None,
         **settings: "Any",
     ) -> "Supervisor":
         instance = cls(
@@ -115,7 +122,7 @@ class Supervisor:
     async def start_flow(
         self,
         flow: "Flow",
-        inputs: list["IO[Any]"] | None = None,
+        inputs: list["IOVal[Any]"] | None = None,
         all_outputs: bool = False,
     ) -> dict[str, "IO[Any]"]:
         return await self.executor.start(flow, inputs=inputs, all_outputs=all_outputs)
@@ -131,8 +138,19 @@ class Supervisor:
 
         return cast("FlowExecutionPlan", self.serializer.load(plan))
 
-    def shutdown(self) -> None:
-        self._portal_cm.__exit__(None, None, None)
+    @staticmethod
+    def _shutdown(instance_ref: "Callable[[], Supervisor | None]") -> None:
+        # static using a weakref to prevent reference cycles
+        if (instance := instance_ref()) and not instance._is_shutdown:
+            try:
+                instance._portal_cm.__exit__(None, None, None)
+            except Exception as e:
+                warnings.warn(
+                    f"An exception occurred while shutting down the Supervisor: {e}",
+                    stacklevel=2,
+                )
 
-    def __del__(self) -> None:
-        self.shutdown()
+            instance._is_shutdown = True
+
+    def shutdown(self) -> None:
+        Supervisor._shutdown(lambda: self)

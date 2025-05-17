@@ -1,8 +1,10 @@
-[tool.poetry]
+[project]
 name = "datagraph"
 version = "0.1.0"
 description = "An asynchronous data processing library based on dataflows."
-authors = ["Elias Gabriel <oss@eliasfgabriel.com>"]
+authors = [
+    {name = "Elias Gabriel", email = "oss@eliasfgabriel.com"},
+]
 readme = "README.md"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -16,25 +18,32 @@ classifiers = [
     "Framework :: AnyIO",
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
-    "Typing :: Typed"
+    "Typing :: Typed",
+]
+requires-python = "<4,>=3.11"
+dependencies = [
+    "anyio<5.0.0,>=4.5.0",
+    "asyncstdlib<4.0.0,>=3.13.0",
+    "fast-depends<3.0.0,>=2.4.12",
+    "networkx<4.0.0,>=3.4.2",
+    "pydantic-settings<3.0.0,>=2.8.1",
+    "zstandard<1.0.0,>=0.23.0",
+    "valkey-glide @ git+ssh://git@github.com/valkey-io/valkey-glide.git#subdirectory=python",
 ]
 
-[tool.poetry.dependencies]
-python = ">=3.11,<4"
-anyio = "^4.5.0"
-asyncstdlib = "^3.13.0"
-fast-depends = "^2.4.12"
-networkx = "^3.4.2"
-pydantic-settings = "^2.8.1"
-redis = {extras = ["hiredis"], git = "https://github.com/thearchitector/redis-py.git"}
-zstandard = "^0.23.0"
-
-[tool.poetry.group.dev.dependencies]
-anyio = {extras = ["trio"], version = "^4.5.0"}
-celery = "^5.4.0"
-pytest = "^8.3.5"
-pytest-cov = "^6.0.0"
-uvloop = "^0.21.0"
+[dependency-groups]
+dev = [
+    "anyio[trio]<5.0.0,>=4.5.0",
+    "celery<6.0.0,>=5.4.0",
+    "pytest<9.0.0,>=8.3.5",
+    "pytest-cov<7.0.0,>=6.0.0",
+    "uvloop<1.0.0,>=0.21.0",
+]
+lint = [
+    "mypy<2.0.0,>=1.15.0",
+    "types-networkx<4.0.0.0,>=3.4.2.20250319",
+    "celery-types<1.0.0,>=0.23.0",
+]
 
 [tool.poetry.group.lint.dependencies]
 mypy = "^1.15.0"
@@ -52,5 +61,5 @@ strict = true
 extend-select = ["B", "I", "ASYNC"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

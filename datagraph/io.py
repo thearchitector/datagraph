@@ -55,7 +55,7 @@ class StreamEntry(RootModel[RawStreamEntry]):
 
     @computed_field  # type: ignore[misc]
     @property
-    def ioval_bytes(self) -> bytes:
+    def data(self) -> bytes:
         return self.root[self.stream_key][self.entry_id][0][1]
 
 
@@ -70,52 +70,58 @@ class IO(Generic[T]):
     ) -> None:
         self.name = name
         self._stream_key = f"flow:{flow_execution_plan.uuid}:io:{name}:data"
-        self._completion_key = f"flow:{flow_execution_plan.uuid}:io:{name}:complete"
+        self._completion_value = f"flow:{flow_execution_plan.uuid}:io:{name}".encode()
         self._serializer: "Serializer" = Supervisor.instance().serializer
         self._read_only = read_only
 
     async def stream(
         self, cursor: StreamCursor = StreamCursor.FROM_FIRST
     ) -> "AsyncIterator[T]":
-        client = await Supervisor.instance().client()
+        # GLIDE client connections are not pooled. using a single client/connection
+        # across every blocking stream would cause interference, since 1 stream
+        # would block the client from processing other streams
+        client = await Supervisor.instance().new_glide_client()
 
-        last_entry_id: str = cursor.value
-        last_stream_read: float = current_time()
+        try:
+            last_entry_id: str = cursor.value
+            last_stream_read: float = current_time()
 
-        while True:
-            raw_message: RawStreamEntry | None = await client.xread(
-                {self._stream_key: last_entry_id},
-                options=StreamReadOptions(
-                    block_ms=Supervisor.instance().config.io_read_timeout, count=1
-                ),
-            )
+            while True:
+                raw_message: RawStreamEntry | None = await client.xread(
+                    {self._stream_key: last_entry_id},
+                    options=StreamReadOptions(
+                        block_ms=Supervisor.instance().config.io_read_timeout,
+                        count=1,
+                    ),
+                )
 
-            # no message in the blocking window and the stream is complete, so
-            # there's a pretty solid chance we won't ever stream more info
-            if not raw_message:
-                if await self.is_complete():
+                # no message in the blocking window
+                if not raw_message:
+                    if (
+                        current_time() - last_stream_read
+                        > Supervisor.instance().config.io_read_pending_timeout
+                    ):
+                        raise IOStreamTimeout(
+                            self.name,
+                            Supervisor.instance().config.io_read_pending_timeout,
+                        )
+
+                    continue
+
+                # if the message is the completion message, we're done
+                message = StreamEntry(raw_message)
+                if message.data == self._completion_value:
                     break
-                elif (
-                    current_time() - last_stream_read
-                    > Supervisor.instance().config.io_read_pending_timeout
-                ):
-                    raise IOStreamTimeout(
-                        self.name,
-                        Supervisor.instance().config.io_read_pending_timeout,
-                    )
 
-                await anyio.lowlevel.checkpoint()
-                continue
+                ioval = cast(IOVal["T"], self._serializer.load(message.data))
+                if ioval.name != self.name:
+                    raise MismatchedIOError("read", ioval.name, self.name)
 
-            message = StreamEntry(raw_message)
-            ioval = cast(IOVal["T"], self._serializer.load(message.ioval_bytes))
-
-            if ioval.name != self.name:
-                raise MismatchedIOError("read", ioval.name, self.name)
-
-            last_entry_id = message.entry_id
-            last_stream_read = current_time()
-            yield ioval.value
+                last_entry_id = message.entry_id
+                last_stream_read = current_time()
+                yield ioval.value
+        finally:
+            await client.close()
 
     async def first(self) -> T:
         return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))  # noqa: F821
@@ -167,8 +173,17 @@ class IO(Generic[T]):
 
     async def complete(self) -> None:
         client = await Supervisor.instance().client()
-        await client.set(self._completion_key, b"true")
+        await client.xadd(self._stream_key, [("eos", self._completion_value)])
 
     async def is_complete(self) -> bool:
         client = await Supervisor.instance().client()
-        return await client.get(self._completion_key) == b"true"
+        raw_message: RawStreamEntry | None = await client.xread(
+            {self._stream_key: StreamCursor.FROM_LATEST.value},
+            options=StreamReadOptions(count=1),
+        )
+
+        if not raw_message:
+            return False
+
+        message = StreamEntry(raw_message)
+        return message.data == self._completion_value

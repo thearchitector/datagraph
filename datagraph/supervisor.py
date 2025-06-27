@@ -113,15 +113,18 @@ class Supervisor:
 
         raise UnregisteredProcessorError(processor.name)
 
+    async def new_glide_client(self) -> "TGlideClient":
+        return await (
+            GlideClusterClient
+            if isinstance(self._glide_config, GlideClusterClientConfiguration)
+            else GlideClient
+        ).create(self._glide_config)
+
     async def client(self) -> "TGlideClient":
         try:
             return self._client_var.get()
         except LookupError:
-            client = await (
-                GlideClusterClient
-                if isinstance(self._glide_config, GlideClusterClientConfiguration)
-                else GlideClient
-            ).create(self._glide_config)
+            client = await self.new_glide_client()
             run_finally(client.close)
 
             self._client_var.set(client)

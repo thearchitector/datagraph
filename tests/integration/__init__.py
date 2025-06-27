@@ -180,5 +180,5 @@ async def test_execute_flow_interlaced(supervisor):
     # increasing series of timestamps, i.e. we should see CPCPCP. if C processed
     # all values before P, we'd see CCCPPP, and the sorted list would not be
     # identical to the raw zipped one
-    timestamps = list(zip(p_timestamps, c_timestamps))
+    timestamps = list(zip(p_timestamps, c_timestamps, strict=False))
     assert timestamps == sorted(timestamps)

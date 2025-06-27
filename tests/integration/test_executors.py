@@ -9,9 +9,11 @@ from datagraph.executor.celery import CeleryExecutor
 from .processors import bar, consumer, first, foo, foobar, producer, second
 
 
-@pytest.fixture(params=[LocalExecutor, CeleryExecutor], ids=("local", "celery"))
-async def supervisor(request, monkeypatch):
-    monkeypatch.setattr(Supervisor, "_instance", None)
+@pytest.fixture(
+    params=[LocalExecutor, CeleryExecutor], ids=("local", "celery"), scope="module"
+)
+async def supervisor(request):
+    Supervisor._instance = None
     config = GlideClientConfiguration(addresses=[NodeAddress()], request_timeout=10000)
 
     if request.param == LocalExecutor:
@@ -35,9 +37,9 @@ async def supervisor(request, monkeypatch):
         shared_task(name=first.name, ignore_result=True)(_first)
         shared_task(name=second.name, ignore_result=True)(_second)
 
-        celery_app = request.getfixturevalue("celery_app")
+        celery_app = request.getfixturevalue("celery_session_app")
         # this is necessary to spin up the worker thread
-        _ = request.getfixturevalue("celery_worker")
+        _ = request.getfixturevalue("celery_session_worker")
 
         yield Supervisor.attach(
             glide_config=config, executor=CeleryExecutor(celery_app)

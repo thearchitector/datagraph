@@ -16,22 +16,22 @@ if TYPE_CHECKING:  # pragma: no cover
 
 class Serializer(ABC):
     @abstractmethod
-    async def serialize(self, value: "Any") -> bytes:
+    def serialize(self, value: "Any") -> bytes:
         """Serialize a value to compressed bytestream for storage."""
         raise NotImplementedError()
 
     @abstractmethod
-    async def deserialize(self, data: bytes) -> "Any":
+    def deserialize(self, data: bytes) -> "Any":
         """Deserialize a compressed bytestream from storage."""
         raise NotImplementedError()
 
     @abstractmethod
-    async def compress(self, data: bytes) -> bytes:
+    def compress(self, data: bytes) -> bytes:
         """Compress a bytestream for storage."""
         raise NotImplementedError()
 
     @abstractmethod
-    async def decompress(self, data: bytes) -> bytes:
+    def decompress(self, data: bytes) -> bytes:
         """Decompress a bytestream from storage."""
         raise NotImplementedError()
 
@@ -58,7 +58,7 @@ class PicklingZstdSerializer(Serializer):
         self.secret_key: bytes = secret.encode()
 
     def serialize(self, data: "Any") -> bytes:
-        return pickletools.optimize(pickle.dumps(data, protocol=5))
+        return pickle.dumps(data, protocol=5)
 
     def deserialize(self, data: bytes) -> "Any":
         return pickle.loads(data)
@@ -78,6 +78,7 @@ class PicklingZstdSerializer(Serializer):
         return self._thread_context.decompressor
 
     def compress(self, data: bytes) -> bytes:
+        data = pickletools.optimize(data)
         compressed = self.compressor.compress(data)
         signer = blake2b(digest_size=16, key=self.secret_key, usedforsecurity=True)
         signer.update(compressed)

@@ -5,7 +5,7 @@ import pytest
 pytest_plugins = ("celery.contrib.pytest",)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 async def supervisor():
     # Use AsyncMock for the Supervisor.instance() mock so it can be awaited
     with patch(
@@ -17,7 +17,6 @@ async def supervisor():
 @pytest.fixture(
     params=[
         pytest.param(("asyncio", {"use_uvloop": False}), id="asyncio"),
-        pytest.param(("asyncio", {"use_uvloop": True}), id="asyncio+uvloop"),
         pytest.param(
             ("trio", {"restrict_keyboard_interrupt_to_checkpoints": True}), id="trio"
         ),

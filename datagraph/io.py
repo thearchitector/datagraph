@@ -77,13 +77,13 @@ class IO(Generic[T]):
     async def stream(
         self, cursor: StreamCursor = StreamCursor.FROM_FIRST
     ) -> "AsyncIterator[T]":
+        client = await Supervisor.instance().client()
+
         last_entry_id: str = cursor.value
         last_stream_read: float = current_time()
 
         while True:
-            raw_message: RawStreamEntry | None = await (
-                await Supervisor.instance().client()
-            ).xread(
+            raw_message: RawStreamEntry | None = await client.xread(
                 {self._stream_key: last_entry_id},
                 options=StreamReadOptions(
                     block_ms=Supervisor.instance().config.io_read_timeout, count=1
@@ -104,6 +104,7 @@ class IO(Generic[T]):
                         Supervisor.instance().config.io_read_pending_timeout,
                     )
 
+                await anyio.lowlevel.checkpoint()
                 continue
 
             message = StreamEntry(raw_message)
@@ -161,15 +162,13 @@ class IO(Generic[T]):
         elif value.name != self.name:
             raise MismatchedIOError("write", self.name, value.name)
 
-        await (await Supervisor.instance().client()).xadd(
-            self._stream_key, [("ioval", self._serializer.dump(value))]
-        )
+        client = await Supervisor.instance().client()
+        await client.xadd(self._stream_key, [("ioval", self._serializer.dump(value))])
 
     async def complete(self) -> None:
-        await (await Supervisor.instance().client()).set(self._completion_key, b"true")
+        client = await Supervisor.instance().client()
+        await client.set(self._completion_key, b"true")
 
     async def is_complete(self) -> bool:
-        return (
-            await (await Supervisor.instance().client()).get(self._completion_key)
-            == b"true"
-        )
+        client = await Supervisor.instance().client()
+        return await client.get(self._completion_key) == b"true"

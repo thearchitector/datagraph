@@ -5,8 +5,7 @@ import pytest
 from datagraph.supervisor import Supervisor
 
 
-@pytest.mark.anyio
-async def test_unattached_supervisor(monkeypatch):
+def test_unattached_supervisor(monkeypatch):
     """Test that accessing Supervisor.instance() raises an error if not attached."""
     monkeypatch.setattr(Supervisor, "_instance", None)
 
@@ -14,8 +13,7 @@ async def test_unattached_supervisor(monkeypatch):
         Supervisor.instance()
 
 
-@pytest.mark.anyio
-async def test_attach_supervisor(monkeypatch):
+def test_attach_supervisor(monkeypatch):
     """Test that the attach method sets the instance correctly."""
     monkeypatch.setattr(Supervisor, "_instance", None)
 

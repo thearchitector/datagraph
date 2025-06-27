@@ -28,7 +28,8 @@ dependencies = [
     "networkx<4.0.0,>=3.4.2",
     "pydantic-settings<3.0.0,>=2.8.1",
     "zstandard<1.0.0,>=0.23.0",
-    "valkey-glide @ git+ssh://git@github.com/valkey-io/valkey-glide.git#subdirectory=python",
+    "valkey-glide>=2.0.1",
+    "anyio-atexit>=1.0.0",
 ]
 
 [dependency-groups]
@@ -38,6 +39,7 @@ dev = [
     "pytest<9.0.0,>=8.3.5",
     "pytest-cov<7.0.0,>=6.0.0",
     "uvloop<1.0.0,>=0.21.0",
+    "asyncio-atexit>=1.0.1",
 ]
 lint = [
     "mypy<2.0.0,>=1.15.0",

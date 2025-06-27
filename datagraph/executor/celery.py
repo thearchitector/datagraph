@@ -20,7 +20,7 @@ class CeleryExecutor(Executor):
     ```python
     celery_app = Celery()
     Supervisor.attach(
-        redis_config={"url": "redis://localhost:6379/0"},
+        glide_config=...,
         executor=CeleryExecutor(celery_app),
     )
 

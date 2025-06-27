@@ -5,7 +5,8 @@ import pytest
 from datagraph.supervisor import Supervisor
 
 
-def test_unattached_supervisor(monkeypatch):
+@pytest.mark.anyio
+async def test_unattached_supervisor(monkeypatch):
     """Test that accessing Supervisor.instance() raises an error if not attached."""
     monkeypatch.setattr(Supervisor, "_instance", None)
 
@@ -13,11 +14,12 @@ def test_unattached_supervisor(monkeypatch):
         Supervisor.instance()
 
 
-def test_attach_supervisor(monkeypatch):
+@pytest.mark.anyio
+async def test_attach_supervisor(monkeypatch):
     """Test that the attach method sets the instance correctly."""
     monkeypatch.setattr(Supervisor, "_instance", None)
 
-    supervisor = Supervisor.attach(redis_config=MagicMock(), executor=MagicMock())
+    supervisor = Supervisor.attach(glide_config=MagicMock(), executor=MagicMock())
 
     assert Supervisor._instance is supervisor
     assert Supervisor.instance() is supervisor

@@ -1,6 +1,7 @@
 import anyio
 import pytest
 from celery import shared_task
+from glide import GlideClientConfiguration, NodeAddress
 
 from datagraph import IO, Flow, IOVal, LocalExecutor, Supervisor
 from datagraph.executor.celery import CeleryExecutor
@@ -11,12 +12,10 @@ from .processors import bar, consumer, first, foo, foobar, producer, second
 @pytest.fixture(params=[LocalExecutor, CeleryExecutor], ids=("local", "celery"))
 async def supervisor(request, monkeypatch):
     monkeypatch.setattr(Supervisor, "_instance", None)
+    config = GlideClientConfiguration(addresses=[NodeAddress()], request_timeout=10000)
 
     if request.param == LocalExecutor:
-        yield Supervisor.attach(
-            redis_config={"url": "redis://localhost:6379/0"},
-            executor=LocalExecutor(),
-        )
+        yield Supervisor.attach(glide_config=config, executor=LocalExecutor())
     elif request.param == CeleryExecutor:
         from .processors import (
             _bar,
@@ -41,8 +40,7 @@ async def supervisor(request, monkeypatch):
         _ = request.getfixturevalue("celery_worker")
 
         yield Supervisor.attach(
-            redis_config={"url": "redis://localhost:6379/0"},
-            executor=CeleryExecutor(celery_app),
+            glide_config=config, executor=CeleryExecutor(celery_app)
         )
 
     Supervisor.instance().shutdown()
@@ -144,7 +142,7 @@ async def test_flow_interlaced(supervisor):
         # increasing series of timestamps, i.e. we should see CPCPCP. if C processed
         # all values before P, we'd see CCCPPP, and the sorted list would not be
         # identical to the raw zipped one
-        timestamps = list(zip(p_timestamps, c_timestamps))
+        timestamps = list(zip(p_timestamps, c_timestamps, strict=False))
         assert timestamps == sorted(timestamps)
 
 

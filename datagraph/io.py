@@ -6,8 +6,8 @@ import anyio
 from anyio import current_time
 from asyncstdlib import zip as azip
 from asyncstdlib import zip_longest as azip_longest
+from glide import StreamReadOptions
 from pydantic import RootModel, computed_field
-from redis.asyncio import RedisError
 
 from .exceptions import IOStreamTimeout, MismatchedIOError, ReadOnlyIOError
 from .supervisor import Supervisor
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from typing import Any, TypeVarTuple
 
     from anyio.streams.memory import MemoryObjectSendStream
-    from redis.asyncio import Redis
 
     from .flow_execution_plan import FlowExecutionPlan
     from .serialization import Serializer
@@ -28,7 +27,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 _NOPAD = object()
-RawStreamEntry = list[tuple[str, list[tuple[str, dict[str, bytes]]]]]
+RawStreamEntry = dict[bytes, dict[bytes, list[tuple[bytes, bytes]]]]
 
 
 @dataclass(kw_only=True, unsafe_hash=True, slots=True)
@@ -44,15 +43,20 @@ class StreamCursor(Enum):
 
 
 class StreamEntry(RootModel[RawStreamEntry]):
-    @computed_field  # type: ignore[misc]
+    @computed_field
     @property
-    def ioval_bytes(self) -> bytes:
-        return self.root[0][1][0][1]["ioval"]
+    def stream_key(self) -> bytes:
+        return next(iter(self.root))
 
     @computed_field  # type: ignore[misc]
     @property
     def entry_id(self) -> str:
-        return self.root[0][1][0][0]
+        return next(iter(self.root[self.stream_key]))
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def ioval_bytes(self) -> bytes:
+        return self.root[self.stream_key][self.entry_id][0][1]
 
 
 class IO(Generic[T]):
@@ -67,7 +71,6 @@ class IO(Generic[T]):
         self.name = name
         self._stream_key = f"flow:{flow_execution_plan.uuid}:io:{name}:data"
         self._completion_key = f"flow:{flow_execution_plan.uuid}:io:{name}:complete"
-        self._client: "Redis[bytes]" = Supervisor.instance().client
         self._serializer: "Serializer" = Supervisor.instance().serializer
         self._read_only = read_only
 
@@ -77,41 +80,41 @@ class IO(Generic[T]):
         last_entry_id: str = cursor.value
         last_stream_read: float = current_time()
 
-        try:
-            while True:
-                raw_message: RawStreamEntry | None = await self._client.xread(
-                    streams={self._stream_key: last_entry_id},
-                    count=1,
-                    block=Supervisor.instance().config.io_read_timeout,
-                )
+        while True:
+            raw_message: RawStreamEntry | None = await (
+                await Supervisor.instance().client()
+            ).xread(
+                {self._stream_key: last_entry_id},
+                options=StreamReadOptions(
+                    block_ms=Supervisor.instance().config.io_read_timeout, count=1
+                ),
+            )
 
-                # no message in the blocking window and the stream is complete, so
-                # there's a pretty solid chance we won't ever stream more info
-                if not raw_message:
-                    if await self.is_complete():
-                        break
-                    elif (
-                        current_time() - last_stream_read
-                        > Supervisor.instance().config.io_read_pending_timeout
-                    ):
-                        raise IOStreamTimeout(
-                            self.name,
-                            Supervisor.instance().config.io_read_pending_timeout,
-                        )
+            # no message in the blocking window and the stream is complete, so
+            # there's a pretty solid chance we won't ever stream more info
+            if not raw_message:
+                if await self.is_complete():
+                    break
+                elif (
+                    current_time() - last_stream_read
+                    > Supervisor.instance().config.io_read_pending_timeout
+                ):
+                    raise IOStreamTimeout(
+                        self.name,
+                        Supervisor.instance().config.io_read_pending_timeout,
+                    )
 
-                    continue
+                continue
 
-                message = StreamEntry(raw_message)
-                ioval = cast(IOVal["T"], self._serializer.load(message.ioval_bytes))
+            message = StreamEntry(raw_message)
+            ioval = cast(IOVal["T"], self._serializer.load(message.ioval_bytes))
 
-                if ioval.name != self.name:
-                    raise MismatchedIOError("read", ioval.name, self.name)
+            if ioval.name != self.name:
+                raise MismatchedIOError("read", ioval.name, self.name)
 
-                last_entry_id = message.entry_id
-                last_stream_read = current_time()
-                yield ioval.value
-        except RedisError as e:
-            raise e
+            last_entry_id = message.entry_id
+            last_stream_read = current_time()
+            yield ioval.value
 
     async def first(self) -> T:
         return await anext(self.stream(cursor=StreamCursor.FROM_FIRST))  # noqa: F821
@@ -158,12 +161,15 @@ class IO(Generic[T]):
         elif value.name != self.name:
             raise MismatchedIOError("write", self.name, value.name)
 
-        await self._client.xadd(
-            self._stream_key, {"ioval": self._serializer.dump(value)}
+        await (await Supervisor.instance().client()).xadd(
+            self._stream_key, [("ioval", self._serializer.dump(value))]
         )
 
     async def complete(self) -> None:
-        await self._client.set(self._completion_key, b"true")
+        await (await Supervisor.instance().client()).set(self._completion_key, b"true")
 
     async def is_complete(self) -> bool:
-        return await self._client.get(self._completion_key) == b"true"
+        return (
+            await (await Supervisor.instance().client()).get(self._completion_key)
+            == b"true"
+        )

@@ -22,7 +22,7 @@ WIP docs
 - optimistic parallel processing via directed streams
     - since processors operate on streams you can rely on high degrees of parallelism vs. sequential DAGs
     - it can still be used as a workflow engine/canvas through task partitioning (processors can wait for complete input streams before starting)
-- redis based
+- RESP3 Streams
 - not complicated
     - the API is intentionally minimal and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
 - visualization

@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, cast
 
 from anyio.from_thread import start_blocking_portal
 from anyio.lowlevel import RunVar
-from redis.asyncio import Redis
+from anyio_atexit import run_finally
+from glide import GlideClient, GlideClusterClient, GlideClusterClientConfiguration
 
 from .config import Config
 from .exceptions import UnregisteredProcessorError
@@ -15,6 +16,8 @@ if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Callable
     from typing import Any, ClassVar
     from uuid import UUID
+
+    from glide import GlideClientConfiguration, TGlideClient
 
     from .executor import Executor
     from .flow import Flow
@@ -31,7 +34,7 @@ class Supervisor:
     def __init__(
         self,
         executor: "Executor",
-        redis_config: dict[str, "Any"],
+        glide_config: "GlideClientConfiguration | GlideClusterClientConfiguration",
         serializer: "Serializer | None" = None,
         async_config: dict[str, "Any"] | None = None,
         **settings: "Any",
@@ -44,8 +47,8 @@ class Supervisor:
 
         self.config = Config(**settings)
 
-        self._redis_config = redis_config
-        self._client_var: RunVar["Redis[bytes]"] = RunVar("_client_var")
+        self._glide_config = glide_config
+        self._client_var: RunVar["TGlideClient"] = RunVar("_client_var")
 
         self.executor: "Executor" = executor
         self.serializer: "Serializer" = serializer or PicklingZstdSerializer(
@@ -75,14 +78,14 @@ class Supervisor:
     def attach(
         cls,
         executor: "Executor",
-        redis_config: dict[str, "Any"],
+        glide_config: "GlideClientConfiguration | GlideClusterClientConfiguration",
         serializer: "Serializer | None" = None,
         async_config: dict[str, "Any"] | None = None,
         **settings: "Any",
     ) -> "Supervisor":
         instance = cls(
             executor,
-            redis_config,
+            glide_config,
             serializer=serializer,
             async_config=async_config,
             **settings,
@@ -110,12 +113,17 @@ class Supervisor:
 
         raise UnregisteredProcessorError(processor.name)
 
-    @property
-    def client(self) -> "Redis[bytes]":
+    async def client(self) -> "TGlideClient":
         try:
             return self._client_var.get()
         except LookupError:
-            client = Redis.from_url(**self._redis_config, decode_responses=False)
+            client = await (
+                GlideClusterClient
+                if isinstance(self._glide_config, GlideClusterClientConfiguration)
+                else GlideClient
+            ).create(self._glide_config)
+            run_finally(client.close)
+
             self._client_var.set(client)
             return client
 
@@ -130,7 +138,9 @@ class Supervisor:
     async def load_flow_execution_plan(
         self, flow_execution_uuid: "UUID"
     ) -> "FlowExecutionPlan":
-        plan: bytes | None = await self.client.get(f"flow:{flow_execution_uuid}")
+        plan: bytes | None = await (await self.client()).get(
+            f"flow:{flow_execution_uuid}"
+        )
         if plan is None:
             raise ValueError(
                 f"Flow execution plan not found for UUID '{flow_execution_uuid}'."

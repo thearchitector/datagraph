@@ -1,68 +1,42 @@
 # Datagraph
 
-An asynchronous data processing library based on dataflows. Datagraph empowers you to design declaratively, abstracting the notion of discrete "tasks" and "queues" into "processors" and "flows" that treat IO as continuous streams of manipulatable information.
+A distributed asynchronous Python data processing framework based on dataflows. Datagraph empowers you to design declaratively, abstracting the notion of discrete "tasks" and "queues" into "processors" and "flows" that treat IO as continuous streams of manipulatable information.
 
-Datagraph is framework-agnostic, meaning it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
+Datagraph is lightweight and infrastructure-agnostic: it is not tied to any particular messaging or distributed queue system. You can use it locally, with Celery,
 or with any other asynchronous function framework; all you need is a notion of "running a function by name" to implement an `Executor`.
 
 Out-of-the-box, there are `Executors` available for local execution and [Celery](https://docs.celeryq.dev/en/stable/index.html).
 
 The only runtime dependency is a RESP3-compliant key/value store. Primary support is for [Valkey](https://valkey.io/).
 
-## Features
+> See [Why?](#why) for a more in-depth walk through of Datagraph's advantages.
 
-WIP docs
+### Features
 
-- async first, anyio for trio/asyncio
-- distributed first
-- decentralized
-    - processors can be implemented in different services
-    - no central task broker or management service
-- fastapi-style processor dependency injection
-- optimistic parallel processing via directed streams
-    - since processors operate on streams you can rely on high degrees of parallelism vs. sequential DAGs
-    - it can still be used as a workflow engine/canvas through task partitioning (processors can wait for complete input streams before starting)
-- RESP3 Streams
-- not complicated
-    - the API is intentionally minimal and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
-- visualization
-    - sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow
+- Async-first, with support for both Trio and asyncio.
+- Lightweight and infrastructure-agnostic.
+    - No central task broker or management service.
+    - You only need a RESP3-compliant key/value store.
+- Distributed and decentralized.
+    - Processors can be implemented in different services.
+- FastAPI-style processor dependency injection.
+- Optimistic parallel processing via directed streams.
+    - Since processors operate on streams, you can rely on high degrees of parallelism vs. sequential DAGs.
+    - Supports use as a discrete task canvas through partitioning (processors can wait for complete input streams before starting).
+- Not complicated.
+    - The API is intentionally small and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
+- Visualization
+    - Sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow.
 
-## Rationale
+### Installation
 
-For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
-That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps, and
-finishes when the last step completes. If you have tasks A, B, and C, you can pass data into A, then it can be passed to B, then C.
+```bash
+pdm add datagraph
+# or
+pip install datagraph
+```
 
-In the discrete model, by definition, C cannot run until B is finished, and B cannot run until A is finished: it is serial. When you're dealing with lots of
-data, or perhaps starting with data that isn't readily available in entirety, that restriction begins to pose a problem. If you're building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), your users would likely be upset if they had to wait for all 20,000 files to finish processing in steps A and B before they were loaded into the application by step C.
-
-The procedural way of dealing with this is usually three-fold, all for the purpose of stabily reducing time-to-completion:
-1. Break up the 20,000 files into more manageable groups, then run multiple pipelines.
-2. Implement some mechanism for coordianting and managing those independent groups across the tasks.
-    - In the example above, that would likely _also_ mean implementing some homebrew monitoring tool or integrating with something like OpenTelemetry.
-3. Rent more and bigger hardware (from AWS, etc.) and utilize some Horizontal Autoscaling-like feature so you can run 100 As, 100 Bs, and 100 Cs.
-
-All of that is fine, of course, assuming you can afford it. But, naturally, it comes with other problems that have significantly less obvious answers: what do you do when something fails? Do you ensure your tasks are idempotent and restart everything? Do you implement some partial-success, partial-failure model with a deadletter queue? Do you just pay for Azure Data Factory, or perhaps a team to figure out Apache Kafka?
-
-With Datagraph's approach, you can be a lot more _declarative_. Instead of focusing on the mechanics of a workflow, in either execution or deployment, you can focus on what your workflow achieves. You don't write steps, but implement processors; steps accept and produce discrete values, processors manipulate **continuous streams**.
-
-By treating data as continuous streams, you get three huge advantages:
-1. Processors can manipulate data as soon as it becomes available, rather than waiting for all of it to exist before starting.
-2. You don't have to worry about task order or scheduling. Everything that can run in parallel does, _automatically_.
-3. Your resource requirements don't strictly grow with scale; processing as streams means you are easily free to process as much or as little as you want at any given time without increasing CPU or (more likely) RAM.
-
-In this model, applications like ETL pipelines make a lot more sense. You can start processing individual files as they're uploaded, transform one while the previous is extracting, and don't need to design around buying an EC2 instance with enough RAM to store 20,000 bitmap-filled PDFs.
-
-There's also a fourth benefit. If you're writing a complex application, or just love imperative programming, you'll probably want to be able to run asynchronous tasks regardless. You can use Datagraph for that too; the benefit to defining a workflow using streams is that you can generalize procedural tasks as processors dealing in streams of 1 value.
-
-The result of all of this is a simpler but equally robust system that imparts a smaller cognitive load on your developers.
-
-## Installation
-
-WIP
-
-## Usage
+### Usage
 
 This is a contrived example, but illustrates many of the basic features you'd want to use:
 
@@ -139,6 +113,58 @@ anyio.run(main, backend="trio")
 # >>> 6
 # >>> 8
 ```
+
+## Why?
+
+### Why Streams?
+
+For the most part, distributed task frameworks all share a core design tenant: tasks accept discrete inputs and produce discrete outputs.
+That model works well for one-off operations, or chains of operations dealing with relatively minimal data; your workflow makes sense as a series of steps, and
+finishes when the last step completes. If you have tasks A, B, and C, you can pass data into A, then it can be passed to B, then C.
+
+In the discrete model, by definition, C cannot run until B is finished, and B cannot run until A is finished: it is serial. When you're dealing with lots of
+data, or perhaps starting with data that isn't readily available in entirety, that restriction begins to pose a problem. If you're building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), your users would likely be upset if they had to wait for all 20,000 files to finish processing in steps A and B before they were loaded into the application by step C.
+
+The procedural way of dealing with this would be three-fold, all for the purpose of stabily reducing time-to-completion:
+1. Break up the 20,000 files into more manageable groups, then run multiple pipelines.
+2. Implement some mechanism for coordianting and managing those independent groups.
+3. Rent more, bigger, and faster hardware (from AWS, etc.) and utilize some Horizontal Autoscaling-like feature so you can run 100 As, 100 Bs, and 100 Cs.
+
+All of that is fine, of course, assuming you can afford it. But, naturally, it comes with other problems that have significantly less obvious answers: what do you do when something fails? Do you ensure your tasks are idempotent and restart everything? Do you implement some partial-success, partial-failure model with a deadletter queue? The list can go on.
+
+Streams solve these problems by enabling data to flow through your pipeline continuously. Instead of waiting for entire batches to complete, each piece of data moves through the system as soon as it's ready, with tasks C, B, and A all running in parallel on different pieces of data. The result? Lower latency, better resource utilization, and real-time results.
+
+### Why Datagraph?
+
+While many stream processing frameworks exist, most come with significant complexity and operational overhead. Datagraph offers a fundamentally different approach:
+
+1. **No external runtime or complex infrastructure**
+   - Unlike Kafka/Flink/Spark, Datagraph is pure Python with a single RESP3 store dependency.
+   - No JVM tuning, no Zookeeper clusters, no dedicated stream processing servers, fewer headaches.
+
+2. **Developer experience first**
+   - FastAPI-style dependency injection with a clean, declarative API.
+   - Define processors with simple decorators.
+   - Designed around async generators to match the continuous dataflow model.
+   - Supports both Trio and asyncio.
+
+3. **Infrastructure freedom**
+   - Pluggable executor architecture lets you run anywhere.
+   - Start with `LocalExecutor` and switch to Celery, Kubernetes, or serverless without code changes.
+   - No platform or vendor lock-in. Most of your time can be spent on the logic, not the infra.
+
+4. **Right-sized for practical workloads**
+   - Optimized for the 10K-100K messages/sec range on commodity hardware
+   - Perfect for ETL, IoT ingestion, and real-time dashboards
+   - Built-in backpressure prevents fast producers from overwhelming slow consumers
+
+5. **Visualization included**
+   - Built-in graph rendering shows data flow at a glance
+   - Diagnose bottlenecks visually rather than through logs
+
+Datagraph doesn't aim to replace Apache Beam or Flink for petabyte-scale analytics. Instead, it targets the vast middle ground where teams need streaming capabilities without the operational complexity of distributed stream processing clusters.
+
+By focusing on **simplicity**, **Python-native ergonomics**, and **just-enough streaming**, Datagraph lets you build, test, and scale real-time pipelines in minutes—not months.
 
 ## License
 

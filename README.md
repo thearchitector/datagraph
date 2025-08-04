@@ -15,18 +15,18 @@ The only runtime dependency is a RESP3-compliant key/value store. Primary suppor
 
 - Async-first, with support for both Trio and asyncio.
 - Lightweight and infrastructure-agnostic.
-    - No central task broker or management service.
-    - You only need a RESP3-compliant key/value store.
+  - No central task broker or management service.
+  - You only need a RESP3-compliant key/value store.
 - Distributed and decentralized.
-    - Processors can be implemented in different services.
+  - Processors can be implemented in different services.
 - FastAPI-style processor dependency injection.
 - Optimistic parallel processing via directed streams.
-    - Since processors operate on streams, you can rely on high degrees of parallelism vs. sequential DAGs.
-    - Supports use as a discrete task canvas through partitioning (processors can wait for complete input streams before starting).
+  - Since processors operate on streams, you can rely on high degrees of parallelism vs. sequential DAGs.
+  - Supports use as a discrete task canvas through partitioning (processors can wait for complete input streams before starting).
 - Not complicated.
-    - The API is intentionally small and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
+  - The API is intentionally small and simple, because there's no reason for it not to be (data pipelines are hard enough, why fight with the implementation you don't control?)
 - Visualization
-    - Sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow.
+  - Sometimes it's easier to grasp and talk with graphs, so there's a built-in way to visualize how data moves through a Flow.
 
 ### Installation
 
@@ -126,6 +126,7 @@ In the discrete model, by definition, C cannot run until B is finished, and B ca
 data, or perhaps starting with data that isn't readily available in entirety, that restriction begins to pose a problem. If you're building an ETL pipeline, and one day need to process 20,000 files (not unreasonable for large business), your users would likely be upset if they had to wait for all 20,000 files to finish processing in steps A and B before they were loaded into the application by step C.
 
 The procedural way of dealing with this would be three-fold, all for the purpose of stabily reducing time-to-completion:
+
 1. Break up the 20,000 files into more manageable groups, then run multiple pipelines.
 2. Implement some mechanism for coordianting and managing those independent groups.
 3. Rent more, bigger, and faster hardware (from AWS, etc.) and utilize some Horizontal Autoscaling-like feature so you can run 100 As, 100 Bs, and 100 Cs.
@@ -139,32 +140,20 @@ Streams solve these problems by enabling data to flow through your pipeline cont
 While many stream processing frameworks exist, most come with significant complexity and operational overhead. Datagraph offers a fundamentally different approach:
 
 1. **No external runtime or complex infrastructure**
-   - Unlike Kafka/Flink/Spark, Datagraph is pure Python with a single RESP3 store dependency.
-   - No JVM tuning, no Zookeeper clusters, no dedicated stream processing servers, fewer headaches.
 
-2. **Developer experience first**
+   - Unlike Kafka/Flink/Spark, Datagraph is pure Python with a single RESP3 store dependency.
+   - Start with `LocalExecutor` and switch to Celery or another Executor without huge refactors.
+
+2. **A friendly, intuitive API**
+
    - FastAPI-style dependency injection with a clean, declarative API.
    - Define processors with simple decorators.
    - Designed around async generators to match the continuous dataflow model.
    - Supports both Trio and asyncio.
 
-3. **Infrastructure freedom**
-   - Pluggable executor architecture lets you run anywhere.
-   - Start with `LocalExecutor` and switch to Celery, Kubernetes, or serverless without code changes.
-   - No platform or vendor lock-in. Most of your time can be spent on the logic, not the infra.
-
-4. **Right-sized for practical workloads**
-   - Optimized for the 10K-100K messages/sec range on commodity hardware
-   - Perfect for ETL, IoT ingestion, and real-time dashboards
-   - Built-in backpressure prevents fast producers from overwhelming slow consumers
-
-5. **Visualization included**
+3. **Visualization included**
    - Built-in graph rendering shows data flow at a glance
    - Diagnose bottlenecks visually rather than through logs
-
-Datagraph doesn't aim to replace Apache Beam or Flink for petabyte-scale analytics. Instead, it targets the vast middle ground where teams need streaming capabilities without the operational complexity of distributed stream processing clusters.
-
-By focusing on **simplicity**, **Python-native ergonomics**, and **just-enough streaming**, Datagraph lets you build, test, and scale real-time pipelines in minutes—not months.
 
 ## License
 
